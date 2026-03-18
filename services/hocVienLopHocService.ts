@@ -306,21 +306,21 @@ export async function handleHocVienLopHocRequest(
       debug: includeMeta,
     });
 
-    let body: { lhName?: string; Name?: string };
+    let body: { name?: string };
     try {
-      body = (await req.json()) as { lhName?: string; Name?: string };
+      body = (await req.json()) as { name?: string };
     } catch (error) {
       logError(requestId, "Invalid JSON body", error);
       return json({ error: "Invalid JSON body.", requestId }, 400);
     }
 
-    const lhName = String(body?.lhName || body?.Name || "").trim();
-    if (!lhName) {
-      return json({ error: "Missing required field: lhName (string).", requestId }, 400);
+    const name = String(body?.name || "").trim();
+    if (!name) {
+      return json({ error: "Missing required field: name (string).", requestId }, 400);
     }
 
-    const sql = buildSql(lhName);
-    logInfo(requestId, "Parsed input", { lhName });
+    const sql = buildSql(name);
+    logInfo(requestId, "Parsed input", { name });
     if (enableVerboseLogs || includeMeta) {
       logInfo(requestId, "Generated SQL", { sql });
     }
@@ -339,7 +339,7 @@ export async function handleHocVienLopHocRequest(
       return json({
         data,
         meta: {
-          lhName,
+          name,
           rawRows: rows.length,
           resultCount: data.length,
         },

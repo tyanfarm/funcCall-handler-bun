@@ -1,9 +1,9 @@
-type KhoaHocLopHocRow = {
+type HocVienRow = {
+  TenHocVien?: string;
+  MaHocVien?: string;
+  ThongTinHocVien?: string;
   TenKhoaHoc?: string;
-  NgayBatDau?: string;
-  NgayKetThuc?: string;
   TenLopHoc?: string;
-  SoLuongHocVien?: number | string;
 };
 
 const eduBaseUrl = process.env.EDU_BASE_URL || "http://localhost:3003";
@@ -11,8 +11,8 @@ const eduGetDataPath =
   process.env.EDU_GETDATA_PATH ||
   "/daotao/api/services/EDU/read/EduDataClient/GetData";
 const enableVerboseLogs = process.env.DEBUG_API_LOGS === "1";
-const mockKhoaHocLopHocResponseFile =
-  (process.env.MOCK_KHOA_HOC_LOP_HOC_RESPONSE_FILE || "").trim();
+const mockHocVienResponseFile =
+  (process.env.MOCK_HOC_VIEN_RESPONSE_FILE || "").trim();
 
 function json(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), {
@@ -89,74 +89,100 @@ function getValueByKeys(
   return undefined;
 }
 
-function escapeSqlValue(input: string): string {
-  return input.replace(/'/g, "''").trim();
+function toNonNegativeInt(value: unknown, fallback: number): number {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.max(0, Math.floor(parsed));
 }
 
-function toNumberOrZero(value: unknown): number {
-  if (typeof value === "number") return Number.isFinite(value) ? value : 0;
-  if (typeof value === "string") {
-    const parsed = Number(value.trim());
-    return Number.isFinite(parsed) ? parsed : 0;
-  }
-  return 0;
+function escapeContainsValue(input: string): string {
+  return input.replace(/'/g, "''").replace(/\"/g, '""').trim();
 }
 
-function normalizeFlatRow(row: Record<string, unknown>): KhoaHocLopHocRow {
+function buildSql(skipCount: number, maxResultCount: number, name: string): string {
+  const whereClause = name
+    ? `WHERE CONTAINS(hv.Name, N'\"${escapeContainsValue(name)}\"')`
+    : "";
+
+  return [
+    "SELECT hv.Name AS TenHocVien, hv.Code AS MaHocVien, hv.Value2 AS ThongTinHocVien, kh.Name AS TenKhoaHoc, lh.Name AS TenLopHoc",
+    "FROM HocViens hv",
+    "JOIN KhoaHocs kh ON hv.KhoaHocId = kh.Id",
+    "JOIN LopHocs lh ON hv.LopHocId = lh.Id",
+    whereClause,
+    "ORDER BY hv.Code ASC",
+    `OFFSET ${skipCount} ROWS FETCH NEXT ${maxResultCount} ROWS ONLY`,
+  ]
+    .filter(Boolean)
+    .join(" ");
+}
+
+function normalizeFlatRow(row: Record<string, unknown>): HocVienRow {
   return {
+    TenHocVien: String(
+      getValueByKeys(row, ["TenHocVien", "tenHocVien", "Name", "name"]) || "",
+    ).trim(),
+    MaHocVien: String(
+      getValueByKeys(row, ["MaHocVien", "maHocVien", "Code", "code"]) || "",
+    ).trim(),
+    ThongTinHocVien: String(
+      getValueByKeys(row, ["ThongTinHocVien", "thongTinHocVien", "Value2", "value2"]) || "",
+    ).trim(),
     TenKhoaHoc: String(
-      getValueByKeys(row, ["TenKhoaHoc", "tenKhoaHoc", "Name", "name"]) || "",
-    ).trim(),
-    NgayBatDau: String(
-      getValueByKeys(row, ["NgayBatDau", "ngayBatDau"]) || "",
-    ).trim(),
-    NgayKetThuc: String(
-      getValueByKeys(row, ["NgayKetThuc", "ngayKetThuc"]) || "",
+      getValueByKeys(row, ["TenKhoaHoc", "tenKhoaHoc"]) || "",
     ).trim(),
     TenLopHoc: String(
       getValueByKeys(row, ["TenLopHoc", "tenLopHoc"]) || "",
     ).trim(),
-    SoLuongHocVien: toNumberOrZero(
-      getValueByKeys(row, ["SoLuongHocVien", "soLuongHocVien"]),
-    ),
   };
 }
 
-function flattenGroupedPayload(payload: unknown): KhoaHocLopHocRow[] | null {
+function flattenGroupedPayload(payload: unknown): HocVienRow[] | null {
   if (!Array.isArray(payload)) return null;
-  const rows: KhoaHocLopHocRow[] = [];
+  const rows: HocVienRow[] = [];
 
   for (const item of payload) {
     if (item === null || typeof item !== "object") continue;
-    const obj = item as Record<string, unknown>;
+    const hv = item as Record<string, unknown>;
 
-    const tenKhoaHoc = String(
-      getValueByKeys(obj, ["TenKhoaHoc", "tenKhoaHoc", "Name", "name"]) || "",
+    const tenHocVien = String(
+      getValueByKeys(hv, ["TenHocVien", "tenHocVien", "Name", "name"]) || "",
     ).trim();
-    const ngayBatDau = String(
-      getValueByKeys(obj, ["NgayBatDau", "ngayBatDau"]) || "",
+    const maHocVien = String(
+      getValueByKeys(hv, ["MaHocVien", "maHocVien", "Code", "code"]) || "",
     ).trim();
-    const ngayKetThuc = String(
-      getValueByKeys(obj, ["NgayKetThuc", "ngayKetThuc"]) || "",
+    const thongTinHocVien = String(
+      getValueByKeys(hv, ["ThongTinHocVien", "thongTinHocVien", "Value2", "value2"]) || "",
     ).trim();
-    const lopHocs = getValueByKeys(obj, ["lopHocs", "LopHocs", "lh", "lopHoc"]);
+    const khList = getValueByKeys(hv, ["kh", "KH"]);
 
-    if (!tenKhoaHoc || !Array.isArray(lopHocs)) continue;
+    if (!tenHocVien || !maHocVien || !Array.isArray(khList)) continue;
 
-    for (const lopHoc of lopHocs) {
-      if (lopHoc === null || typeof lopHoc !== "object") continue;
-      const lh = lopHoc as Record<string, unknown>;
-      rows.push({
-        TenKhoaHoc: tenKhoaHoc,
-        NgayBatDau: ngayBatDau,
-        NgayKetThuc: ngayKetThuc,
-        TenLopHoc: String(
-          getValueByKeys(lh, ["TenLopHoc", "tenLopHoc", "Name", "name"]) || "",
-        ).trim(),
-        SoLuongHocVien: toNumberOrZero(
-          getValueByKeys(lh, ["SoLuongHocVien", "soLuongHocVien"]),
-        ),
-      });
+    for (const khItem of khList) {
+      if (khItem === null || typeof khItem !== "object") continue;
+      const kh = khItem as Record<string, unknown>;
+
+      const tenKhoaHoc = String(
+        getValueByKeys(kh, ["TenKhoaHoc", "tenKhoaHoc", "Name", "name"]) || "",
+      ).trim();
+      const lhList = getValueByKeys(kh, ["lh", "LH", "lopHocs", "LopHocs"]);
+
+      if (!tenKhoaHoc || !Array.isArray(lhList)) continue;
+
+      for (const lhItem of lhList) {
+        if (lhItem === null || typeof lhItem !== "object") continue;
+        const lh = lhItem as Record<string, unknown>;
+
+        rows.push({
+          TenHocVien: tenHocVien,
+          MaHocVien: maHocVien,
+          ThongTinHocVien: thongTinHocVien,
+          TenKhoaHoc: tenKhoaHoc,
+          TenLopHoc: String(
+            getValueByKeys(lh, ["TenLopHoc", "tenLopHoc", "Name", "name"]) || "",
+          ).trim(),
+        });
+      }
     }
   }
 
@@ -166,12 +192,12 @@ function flattenGroupedPayload(payload: unknown): KhoaHocLopHocRow[] | null {
 function isLikelyFlatRow(value: unknown): boolean {
   if (value === null || typeof value !== "object") return false;
   const row = value as Record<string, unknown>;
-  const tenKhoaHoc = getValueByKeys(row, ["TenKhoaHoc", "tenKhoaHoc"]);
-  const tenLopHoc = getValueByKeys(row, ["TenLopHoc", "tenLopHoc"]);
-  return typeof tenKhoaHoc === "string" || typeof tenLopHoc === "string";
+  const tenHocVien = getValueByKeys(row, ["TenHocVien", "tenHocVien", "Name", "name"]);
+  const maHocVien = getValueByKeys(row, ["MaHocVien", "maHocVien", "Code", "code"]);
+  return typeof tenHocVien === "string" || typeof maHocVien === "string";
 }
 
-function extractRows(rawPayload: unknown): KhoaHocLopHocRow[] {
+function extractRows(rawPayload: unknown): HocVienRow[] {
   const queue: unknown[] = [parsePossibleJson(rawPayload)];
   const visited = new Set<object>();
 
@@ -209,28 +235,15 @@ function extractRows(rawPayload: unknown): KhoaHocLopHocRow[] {
   return [];
 }
 
-function buildSql(khName: string): string {
-  const safeKhName = escapeSqlValue(khName);
-  return [
-    "SELECT kh.Name AS TenKhoaHoc, kh.NgayBatDau, kh.NgayKetThuc, lh.Name AS TenLopHoc, COUNT(DISTINCT hv.Id) AS SoLuongHocVien",
-    "FROM LopHocs lh",
-    "JOIN KhoaHocs kh ON lh.KhoaHocId = kh.Id",
-    "LEFT JOIN HocViens hv ON hv.LopHocId = lh.Id",
-    `WHERE kh.Name LIKE N'%${safeKhName}%'`,
-    "AND lh.IsDeleted = 'false'",
-    "GROUP BY kh.Name, kh.NgayBatDau, kh.NgayKetThuc, lh.Name",
-  ].join(" ");
-}
-
 async function callEduDataClient(
   sql: string,
   requestId: string,
-): Promise<KhoaHocLopHocRow[]> {
-  if (mockKhoaHocLopHocResponseFile) {
-    logInfo(requestId, "Using MOCK_KHOA_HOC_LOP_HOC_RESPONSE_FILE", {
-      file: mockKhoaHocLopHocResponseFile,
+): Promise<HocVienRow[]> {
+  if (mockHocVienResponseFile) {
+    logInfo(requestId, "Using MOCK_HOC_VIEN_RESPONSE_FILE", {
+      file: mockHocVienResponseFile,
     });
-    const rawText = await Bun.file(mockKhoaHocLopHocResponseFile).text();
+    const rawText = await Bun.file(mockHocVienResponseFile).text();
     const parsedBody = parsePossibleJson(rawText);
     return extractRows(parsedBody);
   }
@@ -271,61 +284,72 @@ async function callEduDataClient(
   return extractRows(parsedBody);
 }
 
-function buildOutput(rows: KhoaHocLopHocRow[]) {
-  const khoaHocMap = new Map<
+function buildOutput(rows: HocVienRow[]) {
+  const hocVienMap = new Map<
     string,
     {
-      TenKhoaHoc: string;
-      NgayBatDau: string;
-      NgayKetThuc: string;
-      lopHocs: { TenLopHoc: string; SoLuongHocVien: number }[];
-      dedupe: Set<string>;
+      TenHocVien: string;
+      MaHocVien: string;
+      ThongTinHocVien: string;
+      khMap: Map<
+        string,
+        {
+          TenKhoaHoc: string;
+          lh: { TenLopHoc: string }[];
+          lhDedupe: Set<string>;
+        }
+      >;
     }
   >();
 
   for (const row of rows) {
+    const tenHocVien = String(row.TenHocVien || "").trim();
+    const maHocVien = String(row.MaHocVien || "").trim();
+    const thongTinHocVien = String(row.ThongTinHocVien || "").trim();
     const tenKhoaHoc = String(row.TenKhoaHoc || "").trim();
-    const ngayBatDau = String(row.NgayBatDau || "").trim();
-    const ngayKetThuc = String(row.NgayKetThuc || "").trim();
     const tenLopHoc = String(row.TenLopHoc || "").trim();
-    const soLuongHocVien = toNumberOrZero(row.SoLuongHocVien);
 
-    if (!tenKhoaHoc || !tenLopHoc) continue;
+    if (!tenHocVien || !maHocVien || !tenKhoaHoc || !tenLopHoc) continue;
 
-    const key = `${tenKhoaHoc}::${ngayBatDau}::${ngayKetThuc}`;
-    let khoaHoc = khoaHocMap.get(key);
-    if (!khoaHoc) {
-      khoaHoc = {
-        TenKhoaHoc: tenKhoaHoc,
-        NgayBatDau: ngayBatDau,
-        NgayKetThuc: ngayKetThuc,
-        lopHocs: [],
-        dedupe: new Set(),
+    const hocVienKey = `${tenHocVien}::${maHocVien}::${thongTinHocVien}`;
+    let hocVien = hocVienMap.get(hocVienKey);
+    if (!hocVien) {
+      hocVien = {
+        TenHocVien: tenHocVien,
+        MaHocVien: maHocVien,
+        ThongTinHocVien: thongTinHocVien,
+        khMap: new Map(),
       };
-      khoaHocMap.set(key, khoaHoc);
+      hocVienMap.set(hocVienKey, hocVien);
     }
 
-    if (khoaHoc.dedupe.has(tenLopHoc)) continue;
-    khoaHoc.dedupe.add(tenLopHoc);
-    khoaHoc.lopHocs.push({
-      TenLopHoc: tenLopHoc,
-      SoLuongHocVien: soLuongHocVien,
-    });
+    let kh = hocVien.khMap.get(tenKhoaHoc);
+    if (!kh) {
+      kh = {
+        TenKhoaHoc: tenKhoaHoc,
+        lh: [],
+        lhDedupe: new Set(),
+      };
+      hocVien.khMap.set(tenKhoaHoc, kh);
+    }
+
+    if (kh.lhDedupe.has(tenLopHoc)) continue;
+    kh.lhDedupe.add(tenLopHoc);
+    kh.lh.push({ TenLopHoc: tenLopHoc });
   }
 
-  return Array.from(khoaHocMap.values()).map((kh) => ({
-    TenKhoaHoc: kh.TenKhoaHoc,
-    NgayBatDau: kh.NgayBatDau,
-    NgayKetThuc: kh.NgayKetThuc,
-    TongSoHocVien: kh.lopHocs.reduce(
-      (sum, lh) => sum + toNumberOrZero(lh.SoLuongHocVien),
-      0,
-    ),
-    lopHocs: kh.lopHocs,
+  return Array.from(hocVienMap.values()).map((hv) => ({
+    TenHocVien: hv.TenHocVien,
+    MaHocVien: hv.MaHocVien,
+    ThongTinHocVien: hv.ThongTinHocVien,
+    kh: Array.from(hv.khMap.values()).map((kh) => ({
+      TenKhoaHoc: kh.TenKhoaHoc,
+      lh: kh.lh,
+    })),
   }));
 }
 
-export async function handleKhoaHocLopHocRequest(
+export async function handleHocVienRequest(
   req: Request,
   url: URL,
   requestId: string,
@@ -340,21 +364,37 @@ export async function handleKhoaHocLopHocRequest(
       debug: includeMeta,
     });
 
-    let body: { name?: string };
+    let body: {
+      maxResultCount?: number | string;
+      skipCount?: number | string;
+      name?: string;
+    };
     try {
-      body = (await req.json()) as { name?: string };
+      body = (await req.json()) as {
+        maxResultCount?: number | string;
+        skipCount?: number | string;
+        name?: string;
+      };
     } catch (error) {
       logError(requestId, "Invalid JSON body", error);
       return json({ error: "Invalid JSON body.", requestId }, 400);
     }
 
+    const maxResultCount = Math.min(
+      toNonNegativeInt(body?.maxResultCount, 20),
+      200,
+    );
+    const skipCount = toNonNegativeInt(body?.skipCount, 0);
     const name = String(body?.name || "").trim();
-    if (!name) {
-      return json({ error: "Missing required field: name (string).", requestId }, 400);
-    }
 
-    const sql = buildSql(name);
-    logInfo(requestId, "Parsed input", { name });
+    const sql = buildSql(skipCount, maxResultCount, name);
+    logInfo(requestId, "Parsed input", {
+      maxResultCount,
+      skipCount,
+      name,
+      useContainsFilter: !!name,
+    });
+
     if (enableVerboseLogs || includeMeta) {
       logInfo(requestId, "Generated SQL", { sql });
     }
@@ -373,7 +413,10 @@ export async function handleKhoaHocLopHocRequest(
       return json({
         data,
         meta: {
+          maxResultCount,
+          skipCount,
           name,
+          useContainsFilter: !!name,
           rawRows: rows.length,
           resultCount: data.length,
         },

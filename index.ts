@@ -4,6 +4,9 @@ import { handleMonHocBaiHocRequest } from "./services/monHocBaiHocService";
 import { handleKhoaHocRequest } from "./services/khoaHocService";
 import { handleKhoaHocLopHocRequest } from "./services/khoaHocLopHocService";
 import { handleHocVienLopHocRequest } from "./services/hocVienLopHocService";
+import { handleChuongTrinhKhoaHocRequest } from "./services/chuongTrinhKhoaHocService";
+import { handleHocVienRequest } from "./services/hocVienService";
+import { handleDocsRequest } from "./docs/docsService";
 
 const port = Number(process.env.PORT || 3000);
 
@@ -36,12 +39,20 @@ const server = Bun.serve({
       });
     }
 
+    if (url.pathname === "/docs" && req.method === "GET") {
+      return handleDocsRequest(url);
+    }
+
     if (url.pathname === "/api/chuongTrinh/monHoc" && req.method === "POST") {
       return handleChuongTrinhMonHocRequest(req, url, requestId);
     }
 
     if (url.pathname === "/api/chuongTrinh" && req.method === "POST") {
       return handleChuongTrinhRequest(req, url, requestId);
+    }
+
+    if (url.pathname === "/api/chuongTrinhKhoaHoc/search" && req.method === "POST") {
+      return handleChuongTrinhKhoaHocRequest(req, url, requestId);
     }
 
     if ((url.pathname === "/api/monHoc/baiHoc" || url.pathname === "/api/ctmhMh") && req.method === "POST") {
@@ -58,6 +69,10 @@ const server = Bun.serve({
 
     if (url.pathname === "/api/lopHoc/hocVien" && req.method === "POST") {
       return handleHocVienLopHocRequest(req, url, requestId);
+    }
+
+    if (url.pathname === "/api/hocVien" && req.method === "POST") {
+      return handleHocVienRequest(req, url, requestId);
     }
 
     return json({ error: "Not Found" }, 404);

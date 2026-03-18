@@ -390,51 +390,32 @@ export async function handleChuongTrinhMonHocRequest(
       path: url.pathname,
       debug: includeMeta,
     });
-
-    let body: {
-      ctName?: string;
-      Name?: string;
-      tenChuongTrinh?: string;
-    };
+    let body: { name?: string };
     try {
-      body = (await req.json()) as {
-        ctName?: string;
-        Name?: string;
-        tenChuongTrinh?: string;
-      };
+      body = (await req.json()) as { name?: string };
     } catch (error) {
       logError(requestId, "Invalid JSON body", error);
       return json({ error: "Invalid JSON body.", requestId }, 400);
     }
-
-    const ctName = String(
-      body?.ctName || body?.Name || body?.tenChuongTrinh || "",
-    ).trim();
+    const name = String(body?.name || "").trim();
 
     logInfo(requestId, "Parsed input", {
-      ctName,
-      sourceField: body?.ctName
-        ? "ctName"
-        : body?.Name
-          ? "Name"
-          : body?.tenChuongTrinh
-            ? "tenChuongTrinh"
-            : "none",
+      name,
     });
 
-    if (!ctName) {
+    if (!name) {
       logInfo(requestId, "Rejected request: missing program name");
       return json(
         {
           error:
-            "Missing required field: ctName (or Name / tenChuongTrinh) (string).",
+            "Missing required field: name (string).",
           requestId,
         },
         400,
       );
     }
 
-    const sql = buildSql(ctName);
+    const sql = buildSql(name);
     if (enableVerboseLogs || includeMeta) {
       logInfo(requestId, "Generated SQL", {
         sql,

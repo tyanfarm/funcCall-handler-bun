@@ -5,6 +5,8 @@ type KhoaHocRow = {
   NgayKetThuc?: string;
 };
 
+type DateCase = "all" | "notEnded";
+
 const eduBaseUrl = process.env.EDU_BASE_URL || "http://localhost:3003";
 const eduGetDataPath =
   process.env.EDU_GETDATA_PATH ||
@@ -94,6 +96,23 @@ function toNonNegativeInt(value: unknown, fallback: number): number {
   return Math.max(0, Math.floor(parsed));
 }
 
+function normalizeDateCase(value: unknown): DateCase {
+  const normalized = String(value || "")
+    .trim()
+    .toLowerCase();
+
+  if (
+    normalized === "notended" ||
+    normalized === "not_ended" ||
+    normalized === "active" ||
+    normalized === "ongoing"
+  ) {
+    return "notEnded";
+  }
+
+  return "all";
+}
+
 function normalizeRow(row: Record<string, unknown>) {
   return {
     TenKhoaHoc: String(
@@ -150,11 +169,25 @@ function extractRows(rawPayload: unknown): ReturnType<typeof normalizeRow>[] {
   return [];
 }
 
-function buildSql(skipCount: number, maxResultCount: number): string {
+function buildSql(
+  skipCount: number,
+  maxResultCount: number,
+  dateCase: DateCase,
+): string {
+  const whereClauses = [
+    "NgayBatDau IS NOT NULL",
+    "NgayKetThuc IS NOT NULL",
+    "IsDeleted = 'false'",
+  ];
+
+  if (dateCase === "notEnded") {
+    whereClauses.push("NgayKetThuc >= CAST(GETDATE() AS DATE)");
+  }
+
   return [
     "SELECT Name AS TenKhoaHoc, NgayBatDau, NgayKetThuc",
     "FROM KhoaHocs",
-    "WHERE NgayBatDau IS NOT NULL AND NgayKetThuc IS NOT NULL AND IsDeleted = 'false'",
+    `WHERE ${whereClauses.join(" AND ")}`,
     "ORDER BY CreationTime DESC",
     `OFFSET ${skipCount} ROWS FETCH NEXT ${maxResultCount} ROWS ONLY`,
   ].join(" ");
@@ -227,11 +260,13 @@ export async function handleKhoaHocRequest(
     let body: {
       maxResultCount?: number | string;
       skipCount?: number | string;
+      dateCase?: string;
     };
     try {
       body = (await req.json()) as {
         maxResultCount?: number | string;
         skipCount?: number | string;
+        dateCase?: string;
       };
     } catch (error) {
       logError(requestId, "Invalid JSON body", error);
@@ -243,11 +278,13 @@ export async function handleKhoaHocRequest(
       200,
     );
     const skipCount = toNonNegativeInt(body?.skipCount, 0);
+    const dateCase = normalizeDateCase(body?.dateCase);
 
-    const sql = buildSql(skipCount, maxResultCount);
+    const sql = buildSql(skipCount, maxResultCount, dateCase);
     logInfo(requestId, "Parsed input", {
       maxResultCount,
       skipCount,
+      dateCase,
     });
 
     if (enableVerboseLogs || includeMeta) {
@@ -259,6 +296,7 @@ export async function handleKhoaHocRequest(
 
     logInfo(requestId, "Response prepared", {
       resultCount: data.length,
+      dateCase,
       durationMs,
     });
 
@@ -268,6 +306,7 @@ export async function handleKhoaHocRequest(
         meta: {
           maxResultCount,
           skipCount,
+          dateCase,
           resultCount: data.length,
         },
         requestId,

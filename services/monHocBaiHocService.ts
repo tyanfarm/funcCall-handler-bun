@@ -307,21 +307,21 @@ export async function handleMonHocBaiHocRequest(
       debug: includeMeta,
     });
 
-    let body: { mhName?: string; Name?: string };
+    let body: { name?: string };
     try {
-      body = (await req.json()) as { mhName?: string; Name?: string };
+      body = (await req.json()) as { name?: string };
     } catch (error) {
       logError(requestId, "Invalid JSON body", error);
       return json({ error: "Invalid JSON body.", requestId }, 400);
     }
 
-    const mhName = String(body?.mhName || body?.Name || "").trim();
-    if (!mhName) {
-      return json({ error: "Missing required field: mhName (string).", requestId }, 400);
+    const name = String(body?.name || "").trim();
+    if (!name) {
+      return json({ error: "Missing required field: name (string).", requestId }, 400);
     }
 
-    const sql = buildSql(mhName);
-    logInfo(requestId, "Parsed input", { mhName });
+    const sql = buildSql(name);
+    logInfo(requestId, "Parsed input", { name });
     if (enableVerboseLogs || includeMeta) {
       logInfo(requestId, "Generated SQL", { sql });
     }
@@ -340,7 +340,7 @@ export async function handleMonHocBaiHocRequest(
       return json({
         data,
         meta: {
-          mhName,
+          name,
           rawRows: rows.length,
           resultCount: data.length,
         },
@@ -356,3 +356,4 @@ export async function handleMonHocBaiHocRequest(
     return json({ error: message, requestId }, 500);
   }
 }
+
