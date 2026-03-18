@@ -2,9 +2,12 @@ type KhoaHocLopHocRow = {
   TenKhoaHoc?: string;
   NgayBatDau?: string;
   NgayKetThuc?: string;
+  HeDaoTao?: string;
   TenLopHoc?: string;
   SoLuongHocVien?: number | string;
 };
+
+type SearchType = "byKhoaHoc" | "byLopHoc";
 
 const eduBaseUrl = process.env.EDU_BASE_URL || "http://localhost:3003";
 const eduGetDataPath =
@@ -113,6 +116,9 @@ function normalizeFlatRow(row: Record<string, unknown>): KhoaHocLopHocRow {
     NgayKetThuc: String(
       getValueByKeys(row, ["NgayKetThuc", "ngayKetThuc"]) || "",
     ).trim(),
+    HeDaoTao: String(
+      getValueByKeys(row, ["HeDaoTao", "heDaoTao"]) || "",
+    ).trim(),
     TenLopHoc: String(
       getValueByKeys(row, ["TenLopHoc", "tenLopHoc"]) || "",
     ).trim(),
@@ -139,17 +145,57 @@ function flattenGroupedPayload(payload: unknown): KhoaHocLopHocRow[] | null {
     const ngayKetThuc = String(
       getValueByKeys(obj, ["NgayKetThuc", "ngayKetThuc"]) || "",
     ).trim();
-    const lopHocs = getValueByKeys(obj, ["lopHocs", "LopHocs", "lh", "lopHoc"]);
 
-    if (!tenKhoaHoc || !Array.isArray(lopHocs)) continue;
+    if (!tenKhoaHoc) continue;
 
-    for (const lopHoc of lopHocs) {
-      if (lopHoc === null || typeof lopHoc !== "object") continue;
-      const lh = lopHoc as Record<string, unknown>;
+    const hdt = getValueByKeys(obj, ["hdt", "HDT"]);
+    if (Array.isArray(hdt)) {
+      for (const hdtItem of hdt) {
+        if (hdtItem === null || typeof hdtItem !== "object") continue;
+        const h = hdtItem as Record<string, unknown>;
+
+        const heDaoTao = String(
+          getValueByKeys(h, ["HeDaoTao", "heDaoTao", "Name", "name"]) || "",
+        ).trim();
+        const lhList = getValueByKeys(h, ["lh", "LH", "lopHocs", "LopHocs"]);
+
+        if (!Array.isArray(lhList)) continue;
+
+        for (const lhItem of lhList) {
+          if (lhItem === null || typeof lhItem !== "object") continue;
+          const lh = lhItem as Record<string, unknown>;
+          rows.push({
+            TenKhoaHoc: tenKhoaHoc,
+            NgayBatDau: ngayBatDau,
+            NgayKetThuc: ngayKetThuc,
+            HeDaoTao: heDaoTao,
+            TenLopHoc: String(
+              getValueByKeys(lh, ["TenLopHoc", "tenLopHoc", "Name", "name"]) || "",
+            ).trim(),
+            SoLuongHocVien: toNumberOrZero(
+              getValueByKeys(lh, ["SoLuongHocVien", "soLuongHocVien"]),
+            ),
+          });
+        }
+      }
+      continue;
+    }
+
+    const heDaoTao = String(
+      getValueByKeys(obj, ["HeDaoTao", "heDaoTao"]) || "",
+    ).trim();
+    const lhList = getValueByKeys(obj, ["lh", "LH", "lopHocs", "LopHocs"]);
+
+    if (!Array.isArray(lhList)) continue;
+
+    for (const lhItem of lhList) {
+      if (lhItem === null || typeof lhItem !== "object") continue;
+      const lh = lhItem as Record<string, unknown>;
       rows.push({
         TenKhoaHoc: tenKhoaHoc,
         NgayBatDau: ngayBatDau,
         NgayKetThuc: ngayKetThuc,
+        HeDaoTao: heDaoTao,
         TenLopHoc: String(
           getValueByKeys(lh, ["TenLopHoc", "tenLopHoc", "Name", "name"]) || "",
         ).trim(),
@@ -209,16 +255,26 @@ function extractRows(rawPayload: unknown): KhoaHocLopHocRow[] {
   return [];
 }
 
-function buildSql(khName: string): string {
-  const safeKhName = escapeSqlValue(khName);
+function normalizeSearchType(value: unknown): SearchType | null {
+  const normalized = String(value || "").trim();
+  if (normalized === "byKhoaHoc") return "byKhoaHoc";
+  if (normalized === "byLopHoc") return "byLopHoc";
+  return null;
+}
+
+function buildSql(searchType: SearchType, name: string): string {
+  const safeName = escapeSqlValue(name);
+  const whereField = searchType === "byLopHoc" ? "lh.Name" : "kh.Name";
+
   return [
-    "SELECT kh.Name AS TenKhoaHoc, kh.NgayBatDau, kh.NgayKetThuc, lh.Name AS TenLopHoc, COUNT(DISTINCT hv.Id) AS SoLuongHocVien",
+    "SELECT kh.Name AS TenKhoaHoc, kh.NgayBatDau, kh.NgayKetThuc, hdt.Name AS HeDaoTao, lh.Name AS TenLopHoc, COUNT(DISTINCT hv.Id) AS SoLuongHocVien",
     "FROM LopHocs lh",
     "JOIN KhoaHocs kh ON lh.KhoaHocId = kh.Id",
     "LEFT JOIN HocViens hv ON hv.LopHocId = lh.Id",
-    `WHERE kh.Name LIKE N'%${safeKhName}%'`,
+    "JOIN [TSQTT.DATA].dbo.Categories hdt ON kh.heDaoTaoId = hdt.Id",
+    "WHERE " + whereField + " LIKE N'%" + safeName + "%'",
     "AND lh.IsDeleted = 'false'",
-    "GROUP BY kh.Name, kh.NgayBatDau, kh.NgayKetThuc, lh.Name",
+    "GROUP BY kh.Name, kh.NgayBatDau, kh.NgayKetThuc, lh.Name, hdt.Name",
   ].join(" ");
 }
 
@@ -278,7 +334,8 @@ function buildOutput(rows: KhoaHocLopHocRow[]) {
       TenKhoaHoc: string;
       NgayBatDau: string;
       NgayKetThuc: string;
-      lopHocs: { TenLopHoc: string; SoLuongHocVien: number }[];
+      HeDaoTao: string;
+      lh: { TenLopHoc: string; SoLuongHocVien: number }[];
       dedupe: Set<string>;
     }
   >();
@@ -287,19 +344,21 @@ function buildOutput(rows: KhoaHocLopHocRow[]) {
     const tenKhoaHoc = String(row.TenKhoaHoc || "").trim();
     const ngayBatDau = String(row.NgayBatDau || "").trim();
     const ngayKetThuc = String(row.NgayKetThuc || "").trim();
+    const heDaoTao = String(row.HeDaoTao || "").trim();
     const tenLopHoc = String(row.TenLopHoc || "").trim();
     const soLuongHocVien = toNumberOrZero(row.SoLuongHocVien);
 
     if (!tenKhoaHoc || !tenLopHoc) continue;
 
-    const key = `${tenKhoaHoc}::${ngayBatDau}::${ngayKetThuc}`;
+    const key = `${tenKhoaHoc}::${ngayBatDau}::${ngayKetThuc}::${heDaoTao}`;
     let khoaHoc = khoaHocMap.get(key);
     if (!khoaHoc) {
       khoaHoc = {
         TenKhoaHoc: tenKhoaHoc,
         NgayBatDau: ngayBatDau,
         NgayKetThuc: ngayKetThuc,
-        lopHocs: [],
+        HeDaoTao: heDaoTao,
+        lh: [],
         dedupe: new Set(),
       };
       khoaHocMap.set(key, khoaHoc);
@@ -307,7 +366,7 @@ function buildOutput(rows: KhoaHocLopHocRow[]) {
 
     if (khoaHoc.dedupe.has(tenLopHoc)) continue;
     khoaHoc.dedupe.add(tenLopHoc);
-    khoaHoc.lopHocs.push({
+    khoaHoc.lh.push({
       TenLopHoc: tenLopHoc,
       SoLuongHocVien: soLuongHocVien,
     });
@@ -317,11 +376,12 @@ function buildOutput(rows: KhoaHocLopHocRow[]) {
     TenKhoaHoc: kh.TenKhoaHoc,
     NgayBatDau: kh.NgayBatDau,
     NgayKetThuc: kh.NgayKetThuc,
-    TongSoHocVien: kh.lopHocs.reduce(
+    HeDaoTao: kh.HeDaoTao,
+    TongSoHocVien: kh.lh.reduce(
       (sum, lh) => sum + toNumberOrZero(lh.SoLuongHocVien),
       0,
     ),
-    lopHocs: kh.lopHocs,
+    lh: kh.lh,
   }));
 }
 
@@ -340,21 +400,30 @@ export async function handleKhoaHocLopHocRequest(
       debug: includeMeta,
     });
 
-    let body: { name?: string };
+    let body: { searchType?: string; name?: string };
     try {
-      body = (await req.json()) as { name?: string };
+      body = (await req.json()) as { searchType?: string; name?: string };
     } catch (error) {
       logError(requestId, "Invalid JSON body", error);
       return json({ error: "Invalid JSON body.", requestId }, 400);
     }
 
+    const searchType = normalizeSearchType(body?.searchType);
     const name = String(body?.name || "").trim();
+
+    if (!searchType) {
+      return json(
+        { error: "Missing or invalid field: searchType (byKhoaHoc | byLopHoc).", requestId },
+        400,
+      );
+    }
+
     if (!name) {
       return json({ error: "Missing required field: name (string).", requestId }, 400);
     }
 
-    const sql = buildSql(name);
-    logInfo(requestId, "Parsed input", { name });
+    const sql = buildSql(searchType, name);
+    logInfo(requestId, "Parsed input", { searchType, name });
     if (enableVerboseLogs || includeMeta) {
       logInfo(requestId, "Generated SQL", { sql });
     }
@@ -373,6 +442,7 @@ export async function handleKhoaHocLopHocRequest(
       return json({
         data,
         meta: {
+          searchType,
           name,
           rawRows: rows.length,
           resultCount: data.length,

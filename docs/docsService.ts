@@ -1,4 +1,4 @@
-function html(data: string, status = 200): Response {
+﻿function html(data: string, status = 200): Response {
   return new Response(data, {
     status,
     headers: { "Content-Type": "text/html; charset=utf-8" },
@@ -170,13 +170,15 @@ function renderDocsPage(baseUrl: string): string {
         <pre>{
   "maxResultCount": 20,
   "skipCount": 0,
-  "dateCase": "all" // or "notEnded"
+  "isActive": true // default true, skip outdated khoaHoc
 }</pre>
       </article>
 
       <article class="card">
-        <div class="row"><span class="method post">POST</span><code>/api/khoaHoc/lopHoc</code></div>
+        <div class="row"><span class="method post">POST</span><code>/api/khoaHocLopHoc/search</code></div>
+        <p class="muted">Alias: <code>/api/khoaHoc/lopHoc</code></p>
         <pre>{
+  "searchType": "byKhoaHoc", // or "byLopHoc"
   "name": "string"
 }</pre>
       </article>
@@ -193,7 +195,8 @@ function renderDocsPage(baseUrl: string): string {
         <pre>{
   "maxResultCount": 20,
   "skipCount": 0,
-  "name": "string" // optional: if empty, no CONTAINS filter
+  "name": "string", // optional
+  "code": "20DK345" // optional, higher priority than name
 }</pre>
       </article>
     </section>
@@ -205,3 +208,7 @@ function renderDocsPage(baseUrl: string): string {
 export function handleDocsRequest(url: URL): Response {
   return html(renderDocsPage(url.origin));
 }
+
+
+
+

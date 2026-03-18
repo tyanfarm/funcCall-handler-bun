@@ -99,10 +99,17 @@ function escapeContainsValue(input: string): string {
   return input.replace(/'/g, "''").replace(/\"/g, '""').trim();
 }
 
-function buildSql(skipCount: number, maxResultCount: number, name: string): string {
-  const whereClause = name
-    ? `WHERE CONTAINS(hv.Name, N'\"${escapeContainsValue(name)}\"')`
-    : "";
+function buildSql(
+  skipCount: number,
+  maxResultCount: number,
+  name: string,
+  code: string,
+): string {
+  const whereClause = code
+    ? "WHERE CONTAINS(hv.Code, N'\"" + escapeContainsValue(code) + "\"')"
+    : name
+      ? "WHERE CONTAINS(hv.Name, N'\"" + escapeContainsValue(name) + "\"')"
+      : "";
 
   return [
     "SELECT hv.Name AS TenHocVien, hv.Code AS MaHocVien, hv.Value2 AS ThongTinHocVien, kh.Name AS TenKhoaHoc, lh.Name AS TenLopHoc",
@@ -111,10 +118,16 @@ function buildSql(skipCount: number, maxResultCount: number, name: string): stri
     "JOIN LopHocs lh ON hv.LopHocId = lh.Id",
     whereClause,
     "ORDER BY hv.Code ASC",
-    `OFFSET ${skipCount} ROWS FETCH NEXT ${maxResultCount} ROWS ONLY`,
+    "OFFSET " + skipCount + " ROWS FETCH NEXT " + maxResultCount + " ROWS ONLY",
   ]
     .filter(Boolean)
     .join(" ");
+}
+
+function resolveSearchBy(name: string, code: string): "name" | "code" | "none" {
+  if (code) return "code";
+  if (name) return "name";
+  return "none";
 }
 
 function normalizeFlatRow(row: Record<string, unknown>): HocVienRow {
@@ -368,12 +381,14 @@ export async function handleHocVienRequest(
       maxResultCount?: number | string;
       skipCount?: number | string;
       name?: string;
+      code?: string;
     };
     try {
       body = (await req.json()) as {
         maxResultCount?: number | string;
         skipCount?: number | string;
         name?: string;
+        code?: string;
       };
     } catch (error) {
       logError(requestId, "Invalid JSON body", error);
@@ -386,13 +401,17 @@ export async function handleHocVienRequest(
     );
     const skipCount = toNonNegativeInt(body?.skipCount, 0);
     const name = String(body?.name || "").trim();
+    const code = String(body?.code || "").trim();
+    const searchBy = resolveSearchBy(name, code);
 
-    const sql = buildSql(skipCount, maxResultCount, name);
+    const sql = buildSql(skipCount, maxResultCount, name, code);
     logInfo(requestId, "Parsed input", {
       maxResultCount,
       skipCount,
       name,
-      useContainsFilter: !!name,
+      code,
+      searchBy,
+      useContainsFilter: searchBy !== "none",
     });
 
     if (enableVerboseLogs || includeMeta) {
@@ -416,7 +435,9 @@ export async function handleHocVienRequest(
           maxResultCount,
           skipCount,
           name,
-          useContainsFilter: !!name,
+          code,
+          searchBy,
+          useContainsFilter: searchBy !== "none",
           rawRows: rows.length,
           resultCount: data.length,
         },

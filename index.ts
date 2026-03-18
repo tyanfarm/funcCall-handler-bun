@@ -1,4 +1,4 @@
-import { handleChuongTrinhRequest } from "./services/chuongTrinhService";
+﻿import { handleChuongTrinhRequest } from "./services/chuongTrinhService";
 import { handleChuongTrinhMonHocRequest } from "./services/chuongTrinhMonHocService";
 import { handleMonHocBaiHocRequest } from "./services/monHocBaiHocService";
 import { handleKhoaHocRequest } from "./services/khoaHocService";
@@ -63,7 +63,7 @@ const server = Bun.serve({
       return handleKhoaHocRequest(req, url, requestId);
     }
 
-    if (url.pathname === "/api/khoaHoc/lopHoc" && req.method === "POST") {
+    if ((url.pathname === "/api/khoaHocLopHoc/search" || url.pathname === "/api/khoaHoc/lopHoc") && req.method === "POST") {
       return handleKhoaHocLopHocRequest(req, url, requestId);
     }
 
@@ -80,3 +80,4 @@ const server = Bun.serve({
 });
 
 console.log(`Server running at http://localhost:${server.port}`);
+

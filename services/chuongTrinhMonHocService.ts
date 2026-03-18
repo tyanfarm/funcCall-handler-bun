@@ -1,5 +1,8 @@
-type EduRow = {
+﻿type EduRow = {
   TenChuongTrinh?: string;
+  ThoiGianDaoTaoTheoNam?: number | string;
+  NamBanHanh?: number | string;
+  TongSoTiet?: number | string;
   TenMonHoc?: string;
   ChiTietMonHoc?: string;
   Id?: string;
@@ -17,6 +20,9 @@ type SubjectGroup = {
 
 type ProgramGroup = {
   TenChuongTrinh: string;
+  ThoiGianDaoTaoTheoNam: number | string;
+  NamBanHanh: number | string;
+  TongSoTiet: number | string;
   mhMap: Map<string, SubjectGroup>;
 };
 
@@ -81,17 +87,28 @@ function escapeSqlValue(input: string): string {
   return input.replace(/'/g, "''").trim();
 }
 
+function toNumericOrOriginal(value: unknown): number | string {
+  if (typeof value === "number") return value;
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (!trimmed) return "";
+    const parsed = Number(trimmed);
+    return Number.isFinite(parsed) ? parsed : trimmed;
+  }
+  return "";
+}
+
 function buildSql(ctName: string): string {
   const safeCtName = escapeSqlValue(ctName);
   return [
-    "SELECT ct.Name AS TenChuongTrinh, ct.TongSoTiet, ct.ThoiGianDaoTao, mh.Name AS TenMonHoc, ctmh.MoTa AS ChiTietMonHoc",
+    "SELECT ct.Name AS TenChuongTrinh, ct.ThoiGianDaoTao AS ThoiGianDaoTaoTheoNam, ct.NamBanHanh, ct.TongSoTiet, mh.Name AS TenMonHoc, ctmh.moTa AS ChiTietMonHoc",
     "FROM MonHocs mh",
     "JOIN ChuongTrinhMonHocs ctmh ON mh.Id = ctmh.MonHocId",
     "JOIN ChuongTrinhs ct ON ctmh.ChuongTrinhId = ct.Id",
     `WHERE ct.Name LIKE N'%${safeCtName}%'`,
     "AND ctmh.IsDeleted = 'false'",
     "AND ctmh.ViTri > 0",
-    "ORDER BY ctmh.ViTri ASC"
+    "ORDER BY ctmh.ViTri ASC",
   ].join(" ");
 }
 
@@ -136,6 +153,15 @@ function flattenGroupedPrograms(payload: unknown): EduRow[] | null {
     const tenChuongTrinh = String(
       getValueByKeys(p, ["TenChuongTrinh", "tenChuongTrinh"]) || "",
     ).trim();
+    const thoiGianDaoTaoTheoNam = toNumericOrOriginal(
+      getValueByKeys(p, ["ThoiGianDaoTaoTheoNam", "thoiGianDaoTaoTheoNam", "ThoiGianDaoTao", "thoiGianDaoTao"]),
+    );
+    const namBanHanh = toNumericOrOriginal(
+      getValueByKeys(p, ["NamBanHanh", "namBanHanh"]),
+    );
+    const tongSoTiet = toNumericOrOriginal(
+      getValueByKeys(p, ["TongSoTiet", "tongSoTiet"]),
+    );
     const mh = getValueByKeys(p, ["mh", "MH"]);
 
     if (!tenChuongTrinh || !Array.isArray(mh)) continue;
@@ -155,6 +181,9 @@ function flattenGroupedPrograms(payload: unknown): EduRow[] | null {
         const c = chiTiet as Record<string, unknown>;
         rows.push({
           TenChuongTrinh: tenChuongTrinh,
+          ThoiGianDaoTaoTheoNam: thoiGianDaoTaoTheoNam,
+          NamBanHanh: namBanHanh,
+          TongSoTiet: tongSoTiet,
           TenMonHoc: tenMonHoc,
           Id: String(getValueByKeys(c, ["Id", "id"]) || ""),
           ChiTietMonHoc: String(
@@ -323,6 +352,15 @@ function buildOutput(rows: EduRow[]) {
     const tenChuongTrinh = String(
       getValueByKeys(r, ["TenChuongTrinh", "tenChuongTrinh"]) || "",
     ).trim();
+    const thoiGianDaoTaoTheoNam = toNumericOrOriginal(
+      getValueByKeys(r, ["ThoiGianDaoTaoTheoNam", "thoiGianDaoTaoTheoNam", "ThoiGianDaoTao", "thoiGianDaoTao"]),
+    );
+    const namBanHanh = toNumericOrOriginal(
+      getValueByKeys(r, ["NamBanHanh", "namBanHanh"]),
+    );
+    const tongSoTiet = toNumericOrOriginal(
+      getValueByKeys(r, ["TongSoTiet", "tongSoTiet"]),
+    );
     const tenMonHoc = String(
       getValueByKeys(r, ["TenMonHoc", "tenMonHoc"]) || "",
     ).trim();
@@ -336,7 +374,13 @@ function buildOutput(rows: EduRow[]) {
 
     let program = programMap.get(tenChuongTrinh);
     if (!program) {
-      program = { TenChuongTrinh: tenChuongTrinh, mhMap: new Map() };
+      program = {
+        TenChuongTrinh: tenChuongTrinh,
+        ThoiGianDaoTaoTheoNam: thoiGianDaoTaoTheoNam,
+        NamBanHanh: namBanHanh,
+        TongSoTiet: tongSoTiet,
+        mhMap: new Map(),
+      };
       programMap.set(tenChuongTrinh, program);
     }
 
@@ -362,6 +406,9 @@ function buildOutput(rows: EduRow[]) {
 
     return {
       TenChuongTrinh: program.TenChuongTrinh,
+      ThoiGianDaoTaoTheoNam: program.ThoiGianDaoTaoTheoNam,
+      NamBanHanh: program.NamBanHanh,
+      TongSoTiet: program.TongSoTiet,
       tongSoMonHoc: subjects.length,
       mh: subjects,
     };

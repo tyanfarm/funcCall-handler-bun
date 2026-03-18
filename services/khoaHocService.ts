@@ -5,8 +5,6 @@ type KhoaHocRow = {
   NgayKetThuc?: string;
 };
 
-type DateCase = "all" | "notEnded";
-
 const eduBaseUrl = process.env.EDU_BASE_URL || "http://localhost:3003";
 const eduGetDataPath =
   process.env.EDU_GETDATA_PATH ||
@@ -96,21 +94,20 @@ function toNonNegativeInt(value: unknown, fallback: number): number {
   return Math.max(0, Math.floor(parsed));
 }
 
-function normalizeDateCase(value: unknown): DateCase {
-  const normalized = String(value || "")
-    .trim()
-    .toLowerCase();
+function normalizeIsActive(value: unknown): boolean {
+  if (value === undefined || value === null || value === "") return true;
+  if (typeof value === "boolean") return value;
+  if (typeof value === "number") return value !== 0;
 
-  if (
-    normalized === "notended" ||
-    normalized === "not_ended" ||
-    normalized === "active" ||
-    normalized === "ongoing"
-  ) {
-    return "notEnded";
+  const normalized = String(value).trim().toLowerCase();
+  if (["false", "0", "no", "off", "inactive"].includes(normalized)) {
+    return false;
+  }
+  if (["true", "1", "yes", "on", "active"].includes(normalized)) {
+    return true;
   }
 
-  return "all";
+  return true;
 }
 
 function normalizeRow(row: Record<string, unknown>) {
@@ -172,7 +169,7 @@ function extractRows(rawPayload: unknown): ReturnType<typeof normalizeRow>[] {
 function buildSql(
   skipCount: number,
   maxResultCount: number,
-  dateCase: DateCase,
+  isActive: boolean,
 ): string {
   const whereClauses = [
     "NgayBatDau IS NOT NULL",
@@ -180,7 +177,7 @@ function buildSql(
     "IsDeleted = 'false'",
   ];
 
-  if (dateCase === "notEnded") {
+  if (isActive) {
     whereClauses.push("NgayKetThuc >= CAST(GETDATE() AS DATE)");
   }
 
@@ -260,13 +257,13 @@ export async function handleKhoaHocRequest(
     let body: {
       maxResultCount?: number | string;
       skipCount?: number | string;
-      dateCase?: string;
+      isActive?: boolean | string | number;
     };
     try {
       body = (await req.json()) as {
         maxResultCount?: number | string;
         skipCount?: number | string;
-        dateCase?: string;
+        isActive?: boolean | string | number;
       };
     } catch (error) {
       logError(requestId, "Invalid JSON body", error);
@@ -278,13 +275,13 @@ export async function handleKhoaHocRequest(
       200,
     );
     const skipCount = toNonNegativeInt(body?.skipCount, 0);
-    const dateCase = normalizeDateCase(body?.dateCase);
+    const isActive = normalizeIsActive(body?.isActive);
 
-    const sql = buildSql(skipCount, maxResultCount, dateCase);
+    const sql = buildSql(skipCount, maxResultCount, isActive);
     logInfo(requestId, "Parsed input", {
       maxResultCount,
       skipCount,
-      dateCase,
+      isActive,
     });
 
     if (enableVerboseLogs || includeMeta) {
@@ -296,7 +293,7 @@ export async function handleKhoaHocRequest(
 
     logInfo(requestId, "Response prepared", {
       resultCount: data.length,
-      dateCase,
+      isActive,
       durationMs,
     });
 
@@ -306,7 +303,7 @@ export async function handleKhoaHocRequest(
         meta: {
           maxResultCount,
           skipCount,
-          dateCase,
+          isActive,
           resultCount: data.length,
         },
         requestId,
