@@ -3,6 +3,8 @@ type HocVienRow = {
   MaHocVien?: string;
   ThongTinHocVien?: string;
   TenKhoaHoc?: string;
+  NgayBatDau?: string;
+  NgayKetThuc?: string;
   TenLopHoc?: string;
 };
 
@@ -112,7 +114,7 @@ function buildSql(
       : "";
 
   return [
-    "SELECT hv.Name AS TenHocVien, hv.Code AS MaHocVien, hv.Value2 AS ThongTinHocVien, kh.Name AS TenKhoaHoc, lh.Name AS TenLopHoc",
+    "SELECT hv.Name AS TenHocVien, hv.Code AS MaHocVien, hv.Value2 AS ThongTinHocVien, kh.Name AS TenKhoaHoc, kh.NgayBatDau, kh.NgayKetThuc, lh.Name AS TenLopHoc",
     "FROM HocViens hv",
     "JOIN KhoaHocs kh ON hv.KhoaHocId = kh.Id",
     "JOIN LopHocs lh ON hv.LopHocId = lh.Id",
@@ -143,6 +145,12 @@ function normalizeFlatRow(row: Record<string, unknown>): HocVienRow {
     ).trim(),
     TenKhoaHoc: String(
       getValueByKeys(row, ["TenKhoaHoc", "tenKhoaHoc"]) || "",
+    ).trim(),
+    NgayBatDau: String(
+      getValueByKeys(row, ["NgayBatDau", "ngayBatDau"]) || "",
+    ).trim(),
+    NgayKetThuc: String(
+      getValueByKeys(row, ["NgayKetThuc", "ngayKetThuc"]) || "",
     ).trim(),
     TenLopHoc: String(
       getValueByKeys(row, ["TenLopHoc", "tenLopHoc"]) || "",
@@ -178,6 +186,12 @@ function flattenGroupedPayload(payload: unknown): HocVienRow[] | null {
       const tenKhoaHoc = String(
         getValueByKeys(kh, ["TenKhoaHoc", "tenKhoaHoc", "Name", "name"]) || "",
       ).trim();
+      const ngayBatDau = String(
+        getValueByKeys(kh, ["NgayBatDau", "ngayBatDau"]) || "",
+      ).trim();
+      const ngayKetThuc = String(
+        getValueByKeys(kh, ["NgayKetThuc", "ngayKetThuc"]) || "",
+      ).trim();
       const lhList = getValueByKeys(kh, ["lh", "LH", "lopHocs", "LopHocs"]);
 
       if (!tenKhoaHoc || !Array.isArray(lhList)) continue;
@@ -191,6 +205,8 @@ function flattenGroupedPayload(payload: unknown): HocVienRow[] | null {
           MaHocVien: maHocVien,
           ThongTinHocVien: thongTinHocVien,
           TenKhoaHoc: tenKhoaHoc,
+          NgayBatDau: ngayBatDau,
+          NgayKetThuc: ngayKetThuc,
           TenLopHoc: String(
             getValueByKeys(lh, ["TenLopHoc", "tenLopHoc", "Name", "name"]) || "",
           ).trim(),
@@ -308,6 +324,8 @@ function buildOutput(rows: HocVienRow[]) {
         string,
         {
           TenKhoaHoc: string;
+          NgayBatDau: string;
+          NgayKetThuc: string;
           lh: { TenLopHoc: string }[];
           lhDedupe: Set<string>;
         }
@@ -320,6 +338,8 @@ function buildOutput(rows: HocVienRow[]) {
     const maHocVien = String(row.MaHocVien || "").trim();
     const thongTinHocVien = String(row.ThongTinHocVien || "").trim();
     const tenKhoaHoc = String(row.TenKhoaHoc || "").trim();
+    const ngayBatDau = String(row.NgayBatDau || "").trim();
+    const ngayKetThuc = String(row.NgayKetThuc || "").trim();
     const tenLopHoc = String(row.TenLopHoc || "").trim();
 
     if (!tenHocVien || !maHocVien || !tenKhoaHoc || !tenLopHoc) continue;
@@ -336,14 +356,17 @@ function buildOutput(rows: HocVienRow[]) {
       hocVienMap.set(hocVienKey, hocVien);
     }
 
-    let kh = hocVien.khMap.get(tenKhoaHoc);
+    const khKey = `${tenKhoaHoc}::${ngayBatDau}::${ngayKetThuc}`;
+    let kh = hocVien.khMap.get(khKey);
     if (!kh) {
       kh = {
         TenKhoaHoc: tenKhoaHoc,
+        NgayBatDau: ngayBatDau,
+        NgayKetThuc: ngayKetThuc,
         lh: [],
         lhDedupe: new Set(),
       };
-      hocVien.khMap.set(tenKhoaHoc, kh);
+      hocVien.khMap.set(khKey, kh);
     }
 
     if (kh.lhDedupe.has(tenLopHoc)) continue;
@@ -357,6 +380,8 @@ function buildOutput(rows: HocVienRow[]) {
     ThongTinHocVien: hv.ThongTinHocVien,
     kh: Array.from(hv.khMap.values()).map((kh) => ({
       TenKhoaHoc: kh.TenKhoaHoc,
+      NgayBatDau: kh.NgayBatDau,
+      NgayKetThuc: kh.NgayKetThuc,
       lh: kh.lh,
     })),
   }));

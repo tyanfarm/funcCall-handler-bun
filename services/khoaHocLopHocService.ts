@@ -274,6 +274,7 @@ function buildSql(searchType: SearchType, name: string): string {
     "JOIN [TSQTT.DATA].dbo.Categories hdt ON kh.heDaoTaoId = hdt.Id",
     "WHERE " + whereField + " LIKE N'%" + safeName + "%'",
     "AND lh.IsDeleted = 'false'",
+    "AND hv.IsDeleted = 'false'",
     "GROUP BY kh.Name, kh.NgayBatDau, kh.NgayKetThuc, lh.Name, hdt.Name",
   ].join(" ");
 }
@@ -327,7 +328,7 @@ async function callEduDataClient(
   return extractRows(parsedBody);
 }
 
-function buildOutput(rows: KhoaHocLopHocRow[]) {
+function buildOutput(rows: KhoaHocLopHocRow[], searchType: SearchType) {
   const khoaHocMap = new Map<
     string,
     {
@@ -372,17 +373,29 @@ function buildOutput(rows: KhoaHocLopHocRow[]) {
     });
   }
 
-  return Array.from(khoaHocMap.values()).map((kh) => ({
-    TenKhoaHoc: kh.TenKhoaHoc,
-    NgayBatDau: kh.NgayBatDau,
-    NgayKetThuc: kh.NgayKetThuc,
-    HeDaoTao: kh.HeDaoTao,
-    TongSoHocVien: kh.lh.reduce(
+  return Array.from(khoaHocMap.values()).map((kh) => {
+    const tongSoHocVien = kh.lh.reduce(
       (sum, lh) => sum + toNumberOrZero(lh.SoLuongHocVien),
       0,
-    ),
-    lh: kh.lh,
-  }));
+    );
+
+    const base = {
+      TenKhoaHoc: kh.TenKhoaHoc,
+      NgayBatDau: kh.NgayBatDau,
+      NgayKetThuc: kh.NgayKetThuc,
+      HeDaoTao: kh.HeDaoTao,
+      lh: kh.lh,
+    };
+
+    if (searchType === "byLopHoc") {
+      return base;
+    }
+
+    return {
+      ...base,
+      TongSoHocVien: tongSoHocVien,
+    };
+  });
 }
 
 export async function handleKhoaHocLopHocRequest(
@@ -429,7 +442,7 @@ export async function handleKhoaHocLopHocRequest(
     }
 
     const rows = await callEduDataClient(sql, requestId);
-    const data = buildOutput(rows);
+    const data = buildOutput(rows, searchType);
     const durationMs = Date.now() - startedAt;
 
     logInfo(requestId, "Response prepared", {

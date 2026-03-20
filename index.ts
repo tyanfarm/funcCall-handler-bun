@@ -1,4 +1,4 @@
-﻿import { handleChuongTrinhRequest } from "./services/chuongTrinhService";
+import { handleChuongTrinhRequest } from "./services/chuongTrinhService";
 import { handleChuongTrinhMonHocRequest } from "./services/chuongTrinhMonHocService";
 import { handleMonHocBaiHocRequest } from "./services/monHocBaiHocService";
 import { handleKhoaHocRequest } from "./services/khoaHocService";
@@ -6,6 +6,11 @@ import { handleKhoaHocLopHocRequest } from "./services/khoaHocLopHocService";
 import { handleHocVienLopHocRequest } from "./services/hocVienLopHocService";
 import { handleChuongTrinhKhoaHocRequest } from "./services/chuongTrinhKhoaHocService";
 import { handleHocVienRequest } from "./services/hocVienService";
+import { handleKhoaHocKeHoachDaoTaoChiTietRequest } from "./services/khoaHocKeHoachDaoTaoChiTietService";
+import { handleHocVienBangDiemRequest } from "./services/hocVienBangDiemService";
+import { handleGiangDuongRequest } from "./services/giangDuongService";
+import { handleDoiTuongDaoTaoRequest } from "./services/doiTuongDaoTaoService";
+import { handlePhanCongGiangDayRequest } from "./services/phanCongGiangDayService";
 import { handleDocsRequest } from "./docs/docsService";
 
 const port = Number(process.env.PORT || 3000);
@@ -43,11 +48,11 @@ const server = Bun.serve({
       return handleDocsRequest(url);
     }
 
-    if (url.pathname === "/api/chuongTrinh/monHoc" && req.method === "POST") {
+    if (url.pathname === "/api/chuongTrinh/details" && req.method === "POST") {
       return handleChuongTrinhMonHocRequest(req, url, requestId);
     }
 
-    if (url.pathname === "/api/chuongTrinh" && req.method === "POST") {
+    if (url.pathname === "/api/chuongTrinh/list" && req.method === "POST") {
       return handleChuongTrinhRequest(req, url, requestId);
     }
 
@@ -55,11 +60,11 @@ const server = Bun.serve({
       return handleChuongTrinhKhoaHocRequest(req, url, requestId);
     }
 
-    if ((url.pathname === "/api/monHoc/baiHoc" || url.pathname === "/api/ctmhMh") && req.method === "POST") {
+    if ((url.pathname === "/api/monHoc/details" || url.pathname === "/api/ctmhMh") && req.method === "POST") {
       return handleMonHocBaiHocRequest(req, url, requestId);
     }
 
-    if (url.pathname === "/api/khoaHoc" && req.method === "POST") {
+    if (url.pathname === "/api/khoaHoc/list" && req.method === "POST") {
       return handleKhoaHocRequest(req, url, requestId);
     }
 
@@ -67,12 +72,32 @@ const server = Bun.serve({
       return handleKhoaHocLopHocRequest(req, url, requestId);
     }
 
-    if (url.pathname === "/api/lopHoc/hocVien" && req.method === "POST") {
+    if (url.pathname === "/api/lopHoc/details" && req.method === "POST") {
       return handleHocVienLopHocRequest(req, url, requestId);
     }
 
-    if (url.pathname === "/api/hocVien" && req.method === "POST") {
+    if (url.pathname === "/api/hocVien/list" && req.method === "POST") {
       return handleHocVienRequest(req, url, requestId);
+    }
+
+    if (url.pathname === "/api/hocVienBangDiem/search" && req.method === "POST") {
+      return handleHocVienBangDiemRequest(req, url, requestId);
+    }
+
+    if ((url.pathname === "/api/giangDuong/list" || url.pathname === "/api/giangDuong") && req.method === "POST") {
+      return handleGiangDuongRequest(req, url, requestId);
+    }
+
+    if ((url.pathname === "/api/doiTuongDaoTao/list" || url.pathname === "/api/doiTuongDaoTao") && req.method === "POST") {
+      return handleDoiTuongDaoTaoRequest(req, url, requestId);
+    }
+
+    if ((url.pathname === "/api/phanCongGiangDay/search" || url.pathname === "/api/phanCongGiangDay") && req.method === "POST") {
+      return handlePhanCongGiangDayRequest(req, url, requestId);
+    }
+
+    if (url.pathname === "/api/khoaHocKeHoachDaoTaoChiTiet/search" && req.method === "POST") {
+      return handleKhoaHocKeHoachDaoTaoChiTietRequest(req, url, requestId);
     }
 
     return json({ error: "Not Found" }, 404);
@@ -80,4 +105,3 @@ const server = Bun.serve({
 });
 
 console.log(`Server running at http://localhost:${server.port}`);
-

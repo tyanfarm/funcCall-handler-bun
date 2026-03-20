@@ -1,4 +1,4 @@
-﻿function html(data: string, status = 200): Response {
+function html(data: string, status = 200): Response {
   return new Response(data, {
     status,
     headers: { "Content-Type": "text/html; charset=utf-8" },
@@ -19,7 +19,6 @@ function renderDocsPage(baseUrl: string): string {
       --text: #1a1f36;
       --muted: #5f6b85;
       --line: #dbe1ee;
-      --accent: #0b57d0;
       --post: #1e7f3b;
       --get: #0059b3;
     }
@@ -135,14 +134,16 @@ function renderDocsPage(baseUrl: string): string {
       </article>
 
       <article class="card">
-        <div class="row"><span class="method post">POST</span><code>/api/chuongTrinh/monHoc</code></div>
+        <div class="row"><span class="method post">POST</span><code>/api/chuongTrinh/details</code></div>
+        <p class="muted">Alias (old): <code>/api/chuongTrinh/monHoc</code></p>
         <pre>{
   "name": "string"
 }</pre>
       </article>
 
       <article class="card">
-        <div class="row"><span class="method post">POST</span><code>/api/chuongTrinh</code></div>
+        <div class="row"><span class="method post">POST</span><code>/api/chuongTrinh/list</code></div>
+        <p class="muted">Alias (old): <code>/api/chuongTrinh</code></p>
         <pre>{
   "maxResultCount": 10,
   "skipCount": 0
@@ -158,7 +159,7 @@ function renderDocsPage(baseUrl: string): string {
       </article>
 
       <article class="card">
-        <div class="row"><span class="method post">POST</span><code>/api/monHoc/baiHoc</code></div>
+        <div class="row"><span class="method post">POST</span><code>/api/monHoc/details</code></div>
         <p class="muted">Alias: <code>/api/ctmhMh</code></p>
         <pre>{
   "name": "string"
@@ -166,7 +167,7 @@ function renderDocsPage(baseUrl: string): string {
       </article>
 
       <article class="card">
-        <div class="row"><span class="method post">POST</span><code>/api/khoaHoc</code></div>
+        <div class="row"><span class="method post">POST</span><code>/api/khoaHoc/list</code></div>
         <pre>{
   "maxResultCount": 20,
   "skipCount": 0,
@@ -184,19 +185,68 @@ function renderDocsPage(baseUrl: string): string {
       </article>
 
       <article class="card">
-        <div class="row"><span class="method post">POST</span><code>/api/lopHoc/hocVien</code></div>
+        <div class="row"><span class="method post">POST</span><code>/api/khoaHocKeHoachDaoTaoChiTiet/search</code></div>
+        <pre>{
+  "searchType": "byKhoaHoc"
+  "name": "string", // khoaHoc
+  "namHoc": "string",
+  "hocKy": "string" // optional
+}</pre>
+      </article>
+
+      <article class="card">
+        <div class="row"><span class="method post">POST</span><code>/api/lopHoc/details</code></div>
+        <p class="muted">Alias (old): <code>/api/lopHoc/hocVien</code></p>
         <pre>{
   "name": "string"
 }</pre>
       </article>
 
       <article class="card">
-        <div class="row"><span class="method post">POST</span><code>/api/hocVien</code></div>
+        <div class="row"><span class="method post">POST</span><code>/api/hocVien/list</code></div>
+        <p class="muted">Alias (old): <code>/api/hocVien</code></p>
         <pre>{
   "maxResultCount": 20,
   "skipCount": 0,
   "name": "string", // optional
-  "code": "20DK345" // optional, higher priority than name
+  "code": "20\u0110K345" // optional, higher priority than name
+}</pre>
+      </article>
+
+      <article class="card">
+        <div class="row"><span class="method post">POST</span><code>/api/hocVienBangDiem/search</code></div>
+        <pre>{
+  "searchType": "byHocVien",
+  "code": "string", // optional if codes is provided
+  "codes": ["20\u0110Q375", "20\u0110Q376"], // optional, supports 1 or many
+  "namHoc": "2025-2026",
+  "hocKy": "1", // optional
+  "includeSummary": true // optional, requires hocKy
+}</pre>
+      </article>
+
+      <article class="card">
+        <div class="row"><span class="method post">POST</span><code>/api/giangDuong/list</code></div>
+        <p class="muted">Alias: <code>/api/giangDuong</code></p>
+        <pre>{
+  "maxResultCount": 5,
+  "skipCount": 0,
+  "name": "T3009" // optional
+}</pre>
+      </article>
+
+      <article class="card">
+        <div class="row"><span class="method post">POST</span><code>/api/doiTuongDaoTao/list</code></div>
+        <p class="muted">Alias: <code>/api/doiTuongDaoTao</code></p>
+        <pre>{}</pre>
+      </article>
+
+      <article class="card">
+        <div class="row"><span class="method post">POST</span><code>/api/phanCongGiangDay/search</code></div>
+        <p class="muted">Alias: <code>/api/phanCongGiangDay</code></p>
+        <pre>{
+  "lopHocName": "\u0110H32LQE",
+  "monHocName": "Kinh tế chính trị học Mác - Lênin"
 }</pre>
       </article>
     </section>
@@ -208,7 +258,3 @@ function renderDocsPage(baseUrl: string): string {
 export function handleDocsRequest(url: URL): Response {
   return html(renderDocsPage(url.origin));
 }
-
-
-
-
