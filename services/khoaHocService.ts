@@ -1,6 +1,10 @@
+import { findDoiTuongDaoTaoNameById } from "./doiTuongDaoTaoByIdService";
+
 type KhoaHocRow = {
   TenKhoaHoc?: string;
   Name?: string;
+  DoiTuongDaoTaoId?: string;
+  DoiTuongDaoTao?: string;
   NgayBatDau?: string;
   NgayKetThuc?: string;
 };
@@ -110,10 +114,20 @@ function normalizeIsActive(value: unknown): boolean {
   return true;
 }
 
-function normalizeRow(row: Record<string, unknown>) {
+function escapeSqlValue(input: string): string {
+  return input.replace(/'/g, "''").trim();
+}
+
+function normalizeRow(row: Record<string, unknown>): KhoaHocRow {
   return {
     TenKhoaHoc: String(
       getValueByKeys(row, ["TenKhoaHoc", "tenKhoaHoc", "Name", "name"]) || "",
+    ).trim(),
+    DoiTuongDaoTaoId: String(
+      getValueByKeys(row, ["DoiTuongDaoTaoId", "doiTuongDaoTaoId"]) || "",
+    ).trim(),
+    DoiTuongDaoTao: String(
+      getValueByKeys(row, ["DoiTuongDaoTao", "doiTuongDaoTao"]) || "",
     ).trim(),
     NgayBatDau: String(
       getValueByKeys(row, ["NgayBatDau", "ngayBatDau"]) || "",
@@ -131,7 +145,7 @@ function isLikelyKhoaHocRow(value: unknown): boolean {
   return typeof tenKhoaHoc === "string";
 }
 
-function extractRows(rawPayload: unknown): ReturnType<typeof normalizeRow>[] {
+function extractRows(rawPayload: unknown): KhoaHocRow[] {
   const queue: unknown[] = [parsePossibleJson(rawPayload)];
   const visited = new Set<object>();
 
@@ -170,6 +184,7 @@ function buildSql(
   skipCount: number,
   maxResultCount: number,
   isActive: boolean,
+  name: string,
 ): string {
   const whereClauses = [
     "NgayBatDau IS NOT NULL",
@@ -181,8 +196,13 @@ function buildSql(
     whereClauses.push("NgayKetThuc >= CAST(GETDATE() AS DATE)");
   }
 
+  const safeName = escapeSqlValue(name);
+  if (safeName) {
+    whereClauses.push("Name LIKE N'%" + safeName + "%'");
+  }
+
   return [
-    "SELECT Name AS TenKhoaHoc, NgayBatDau, NgayKetThuc",
+    "SELECT Name AS TenKhoaHoc, DoiTuongDaoTaoId, NgayBatDau, NgayKetThuc",
     "FROM KhoaHocs",
     `WHERE ${whereClauses.join(" AND ")}`,
     "ORDER BY CreationTime DESC",
@@ -193,7 +213,7 @@ function buildSql(
 async function callEduDataClient(
   sql: string,
   requestId: string,
-): Promise<ReturnType<typeof normalizeRow>[]> {
+): Promise<KhoaHocRow[]> {
   if (mockKhoaHocResponseFile) {
     logInfo(requestId, "Using MOCK_KHOA_HOC_RESPONSE_FILE", {
       file: mockKhoaHocResponseFile,
@@ -239,6 +259,42 @@ async function callEduDataClient(
   return extractRows(parsedBody);
 }
 
+async function buildOutput(rows: KhoaHocRow[], requestId: string) {
+  const idToName = new Map<string, string>();
+  const uniqueIds = Array.from(
+    new Set(
+      rows
+        .map((row) => String(row.DoiTuongDaoTaoId || "").trim())
+        .filter((id) => !!id),
+    ),
+  );
+
+  await Promise.all(
+    uniqueIds.map(async (id) => {
+      try {
+        const name = await findDoiTuongDaoTaoNameById(id);
+        idToName.set(id, String(name || "").trim());
+      } catch (error) {
+        logError(requestId, "Failed to resolve DoiTuongDaoTaoId", error, { id });
+        idToName.set(id, "");
+      }
+    }),
+  );
+
+  return rows.map((row) => {
+    const id = String(row.DoiTuongDaoTaoId || "").trim();
+    const doiTuongDaoTao =
+      String(row.DoiTuongDaoTao || "").trim() || idToName.get(id) || "";
+
+    return {
+      TenKhoaHoc: String(row.TenKhoaHoc || row.Name || "").trim(),
+      DoiTuongDaoTao: doiTuongDaoTao,
+      NgayBatDau: String(row.NgayBatDau || "").trim(),
+      NgayKetThuc: String(row.NgayKetThuc || "").trim(),
+    };
+  });
+}
+
 export async function handleKhoaHocRequest(
   req: Request,
   url: URL,
@@ -258,12 +314,14 @@ export async function handleKhoaHocRequest(
       maxResultCount?: number | string;
       skipCount?: number | string;
       isActive?: boolean | string | number;
+      name?: string;
     };
     try {
       body = (await req.json()) as {
         maxResultCount?: number | string;
         skipCount?: number | string;
         isActive?: boolean | string | number;
+        name?: string;
       };
     } catch (error) {
       logError(requestId, "Invalid JSON body", error);
@@ -276,22 +334,27 @@ export async function handleKhoaHocRequest(
     );
     const skipCount = toNonNegativeInt(body?.skipCount, 0);
     const isActive = normalizeIsActive(body?.isActive);
+    const name = String(body?.name || "").trim();
 
-    const sql = buildSql(skipCount, maxResultCount, isActive);
+    const sql = buildSql(skipCount, maxResultCount, isActive, name);
     logInfo(requestId, "Parsed input", {
       maxResultCount,
       skipCount,
       isActive,
+      name,
+      useNameFilter: !!name,
     });
 
     if (enableVerboseLogs || includeMeta) {
       logInfo(requestId, "Generated SQL", { sql });
     }
 
-    const data = await callEduDataClient(sql, requestId);
+    const rows = await callEduDataClient(sql, requestId);
+    const data = await buildOutput(rows, requestId);
     const durationMs = Date.now() - startedAt;
 
     logInfo(requestId, "Response prepared", {
+      rawRows: rows.length,
       resultCount: data.length,
       isActive,
       durationMs,
@@ -304,6 +367,9 @@ export async function handleKhoaHocRequest(
           maxResultCount,
           skipCount,
           isActive,
+          name,
+          useNameFilter: !!name,
+          rawRows: rows.length,
           resultCount: data.length,
         },
         requestId,

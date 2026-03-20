@@ -146,7 +146,8 @@ function renderDocsPage(baseUrl: string): string {
         <p class="muted">Alias (old): <code>/api/chuongTrinh</code></p>
         <pre>{
   "maxResultCount": 10,
-  "skipCount": 0
+  "skipCount": 0,
+  "name": "đào tạo" // optional
 }</pre>
       </article>
 
@@ -171,7 +172,8 @@ function renderDocsPage(baseUrl: string): string {
         <pre>{
   "maxResultCount": 20,
   "skipCount": 0,
-  "isActive": true // default true, skip outdated khoaHoc
+  "isActive": true, // default true, skip outdated khoaHoc
+  "name": "đào tạo" // optional
 }</pre>
       </article>
 

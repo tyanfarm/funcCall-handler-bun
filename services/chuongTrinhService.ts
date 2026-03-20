@@ -1,5 +1,9 @@
+import { findDoiTuongDaoTaoNameById } from "./doiTuongDaoTaoByIdService";
+
 type ChuongTrinhRow = {
   Name?: string;
+  DoiTuongDaoTaoId?: string;
+  DoiTuongDaoTao?: string;
   ThoiGianDaoTaoTheoNam?: number | string;
   NamBanHanh?: string | number;
   TongSoTiet?: number | string;
@@ -106,9 +110,19 @@ function toNumericOrOriginal(value: unknown): number | string {
   return "";
 }
 
-function normalizeRow(row: Record<string, unknown>) {
+function escapeSqlValue(input: string): string {
+  return input.replace(/'/g, "''").trim();
+}
+
+function normalizeRow(row: Record<string, unknown>): ChuongTrinhRow {
   return {
     Name: String(getValueByKeys(row, ["Name", "name"]) || "").trim(),
+    DoiTuongDaoTaoId: String(
+      getValueByKeys(row, ["DoiTuongDaoTaoId", "doiTuongDaoTaoId"]) || "",
+    ).trim(),
+    DoiTuongDaoTao: String(
+      getValueByKeys(row, ["DoiTuongDaoTao", "doiTuongDaoTao"]) || "",
+    ).trim(),
     ThoiGianDaoTaoTheoNam: toNumericOrOriginal(
       getValueByKeys(row, [
         "ThoiGianDaoTaoTheoNam",
@@ -133,7 +147,7 @@ function isLikelyChuongTrinhRow(value: unknown): boolean {
   return typeof name === "string";
 }
 
-function extractRows(rawPayload: unknown) {
+function extractRows(rawPayload: unknown): ChuongTrinhRow[] {
   const queue: unknown[] = [parsePossibleJson(rawPayload)];
   const visited = new Set<object>();
 
@@ -164,14 +178,21 @@ function extractRows(rawPayload: unknown) {
     }
   }
 
-  return [] as ReturnType<typeof normalizeRow>[];
+  return [];
 }
 
-function buildSql(skipCount: number, maxResultCount: number): string {
+function buildSql(skipCount: number, maxResultCount: number, name: string): string {
+  const whereClauses = ["IsDeleted = 'false'"];
+  const safeName = escapeSqlValue(name);
+
+  if (safeName) {
+    whereClauses.unshift("Name LIKE N'%" + safeName + "%'");
+  }
+
   return [
-    "SELECT Name, ThoiGianDaoTao AS ThoiGianDaoTaoTheoNam, NamBanHanh, TongSoTiet",
+    "SELECT Name, DoiTuongDaoTaoId, ThoiGianDaoTao AS ThoiGianDaoTaoTheoNam, NamBanHanh, TongSoTiet",
     "FROM ChuongTrinhs",
-    "WHERE IsDeleted = 'false'",
+    "WHERE " + whereClauses.join(" AND "),
     "ORDER BY CreationTime DESC",
     `OFFSET ${skipCount} ROWS FETCH NEXT ${maxResultCount} ROWS ONLY`,
   ].join(" ");
@@ -180,7 +201,7 @@ function buildSql(skipCount: number, maxResultCount: number): string {
 async function callEduDataClient(
   sql: string,
   requestId: string,
-): Promise<ReturnType<typeof normalizeRow>[]> {
+): Promise<ChuongTrinhRow[]> {
   if (mockChuongTrinhResponseFile) {
     logInfo(requestId, "Using MOCK_CHUONG_TRINH_RESPONSE_FILE", {
       file: mockChuongTrinhResponseFile,
@@ -226,6 +247,43 @@ async function callEduDataClient(
   return extractRows(parsedBody);
 }
 
+async function buildOutput(rows: ChuongTrinhRow[], requestId: string) {
+  const idToName = new Map<string, string>();
+  const uniqueIds = Array.from(
+    new Set(
+      rows
+        .map((row) => String(row.DoiTuongDaoTaoId || "").trim())
+        .filter((id) => !!id),
+    ),
+  );
+
+  await Promise.all(
+    uniqueIds.map(async (id) => {
+      try {
+        const name = await findDoiTuongDaoTaoNameById(id);
+        idToName.set(id, String(name || "").trim());
+      } catch (error) {
+        logError(requestId, "Failed to resolve DoiTuongDaoTaoId", error, { id });
+        idToName.set(id, "");
+      }
+    }),
+  );
+
+  return rows.map((row) => {
+    const id = String(row.DoiTuongDaoTaoId || "").trim();
+    const doiTuongDaoTao =
+      String(row.DoiTuongDaoTao || "").trim() || idToName.get(id) || "";
+
+    return {
+      Name: String(row.Name || "").trim(),
+      DoiTuongDaoTao: doiTuongDaoTao,
+      ThoiGianDaoTaoTheoNam: toNumericOrOriginal(row.ThoiGianDaoTaoTheoNam),
+      NamBanHanh: String(row.NamBanHanh || "").trim(),
+      TongSoTiet: toNumericOrOriginal(row.TongSoTiet),
+    };
+  });
+}
+
 export async function handleChuongTrinhRequest(
   req: Request,
   url: URL,
@@ -244,11 +302,13 @@ export async function handleChuongTrinhRequest(
     let body: {
       maxResultCount?: number | string;
       skipCount?: number | string;
+      name?: string;
     };
     try {
       body = (await req.json()) as {
         maxResultCount?: number | string;
         skipCount?: number | string;
+        name?: string;
       };
     } catch (error) {
       logError(requestId, "Invalid JSON body", error);
@@ -260,21 +320,26 @@ export async function handleChuongTrinhRequest(
       200,
     );
     const skipCount = toNonNegativeInt(body?.skipCount, 0);
+    const name = String(body?.name || "").trim();
 
-    const sql = buildSql(skipCount, maxResultCount);
+    const sql = buildSql(skipCount, maxResultCount, name);
     logInfo(requestId, "Parsed input", {
       maxResultCount,
       skipCount,
+      name,
+      useNameFilter: !!name,
     });
 
     if (enableVerboseLogs || includeMeta) {
       logInfo(requestId, "Generated SQL", { sql });
     }
 
-    const data = await callEduDataClient(sql, requestId);
+    const rows = await callEduDataClient(sql, requestId);
+    const data = await buildOutput(rows, requestId);
     const durationMs = Date.now() - startedAt;
 
     logInfo(requestId, "Response prepared", {
+      rawRows: rows.length,
       resultCount: data.length,
       durationMs,
     });
@@ -285,6 +350,9 @@ export async function handleChuongTrinhRequest(
         meta: {
           maxResultCount,
           skipCount,
+          name,
+          useNameFilter: !!name,
+          rawRows: rows.length,
           resultCount: data.length,
         },
         requestId,
