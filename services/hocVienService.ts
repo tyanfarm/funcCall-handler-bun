@@ -97,6 +97,22 @@ function toNonNegativeInt(value: unknown, fallback: number): number {
   return Math.max(0, Math.floor(parsed));
 }
 
+function normalizeIsActive(value: unknown): boolean {
+  if (value === undefined || value === null || value === "") return true;
+  if (typeof value === "boolean") return value;
+  if (typeof value === "number") return value !== 0;
+
+  const normalized = String(value).trim().toLowerCase();
+  if (["false", "0", "no", "off", "inactive"].includes(normalized)) {
+    return false;
+  }
+  if (["true", "1", "yes", "on", "active"].includes(normalized)) {
+    return true;
+  }
+
+  return true;
+}
+
 function escapeContainsValue(input: string): string {
   return input.replace(/'/g, "''").replace(/\"/g, '""').trim();
 }
@@ -106,12 +122,23 @@ function buildSql(
   maxResultCount: number,
   name: string,
   code: string,
+  isActive: boolean,
 ): string {
-  const whereClause = code
-    ? "WHERE CONTAINS(hv.Code, N'\"" + escapeContainsValue(code) + "\"')"
-    : name
-      ? "WHERE CONTAINS(hv.Name, N'\"" + escapeContainsValue(name) + "\"')"
-      : "";
+  const whereClauses: string[] = [];
+
+  if (isActive) {
+    whereClauses.push("kh.NgayKetThuc >= CAST(GETDATE() AS DATE)");
+  }
+
+  if (code) {
+    whereClauses.push("CONTAINS(hv.Code, N'\"" + escapeContainsValue(code) + "\"')");
+  } else if (name) {
+    whereClauses.push("CONTAINS(hv.Name, N'\"" + escapeContainsValue(name) + "\"')");
+  }
+
+  const whereClause = whereClauses.length
+    ? "WHERE " + whereClauses.join(" AND ")
+    : "";
 
   return [
     "SELECT hv.Name AS TenHocVien, hv.Code AS MaHocVien, hv.Value2 AS ThongTinHocVien, kh.Name AS TenKhoaHoc, kh.NgayBatDau, kh.NgayKetThuc, lh.Name AS TenLopHoc",
@@ -405,6 +432,7 @@ export async function handleHocVienRequest(
     let body: {
       maxResultCount?: number | string;
       skipCount?: number | string;
+      isActive?: boolean | string | number;
       name?: string;
       code?: string;
     };
@@ -412,6 +440,7 @@ export async function handleHocVienRequest(
       body = (await req.json()) as {
         maxResultCount?: number | string;
         skipCount?: number | string;
+        isActive?: boolean | string | number;
         name?: string;
         code?: string;
       };
@@ -425,18 +454,20 @@ export async function handleHocVienRequest(
       200,
     );
     const skipCount = toNonNegativeInt(body?.skipCount, 0);
+    const isActive = normalizeIsActive(body?.isActive);
     const name = String(body?.name || "").trim();
     const code = String(body?.code || "").trim();
     const searchBy = resolveSearchBy(name, code);
 
-    const sql = buildSql(skipCount, maxResultCount, name, code);
+    const sql = buildSql(skipCount, maxResultCount, name, code, isActive);
     logInfo(requestId, "Parsed input", {
       maxResultCount,
       skipCount,
+      isActive,
       name,
       code,
       searchBy,
-      useContainsFilter: searchBy !== "none",
+      useContainsFilter: searchBy !== "none" || isActive,
     });
 
     if (enableVerboseLogs || includeMeta) {
@@ -459,10 +490,11 @@ export async function handleHocVienRequest(
         meta: {
           maxResultCount,
           skipCount,
+          isActive,
           name,
           code,
           searchBy,
-          useContainsFilter: searchBy !== "none",
+          useContainsFilter: searchBy !== "none" || isActive,
           rawRows: rows.length,
           resultCount: data.length,
         },
@@ -478,3 +510,4 @@ export async function handleHocVienRequest(
     return json({ error: message, requestId }, 500);
   }
 }
+

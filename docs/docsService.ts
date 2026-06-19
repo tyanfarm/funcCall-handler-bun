@@ -208,8 +208,9 @@ function renderDocsPage(baseUrl: string): string {
         <div class="row"><span class="method post">POST</span><code>/api/hocVien/list</code></div>
         <p class="muted">Alias (old): <code>/api/hocVien</code></p>
         <pre>{
-  "maxResultCount": 20,
+  "maxResultCount": 10,
   "skipCount": 0,
+  "isActive": true, // default true, skip outdated khoaHoc
   "name": "string", // optional
   "code": "20\u0110K345" // optional, higher priority than name
 }</pre>
@@ -223,9 +224,18 @@ function renderDocsPage(baseUrl: string): string {
   "codes": ["20\u0110Q375", "20\u0110Q376"], // optional, supports 1 or many
   "namHoc": "2025-2026",
   "hocKy": "1", // optional
-  "includeSummary": true // optional, requires hocKy
+  "includeSummary": true // optional, default true when hocKy exists
 }</pre>
       </article>
+      <article class="card">
+        <div class="row"><span class="method post">POST</span><code>/api/hocVienDiemTongKet/search</code></div>
+        <pre>{
+  "code": "22\u0110H117",
+  "namHoc": "2025-2026", // optional
+  "hocKy": "1" // optional
+}</pre>
+      </article>
+
 
       <article class="card">
         <div class="row"><span class="method post">POST</span><code>/api/giangDuong/list</code></div>

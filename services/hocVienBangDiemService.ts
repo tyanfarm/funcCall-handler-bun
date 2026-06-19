@@ -18,7 +18,8 @@ type SearchType = "byHocVien";
 
 const SCORE_KEY_MAP: Record<string, string> = {
   "ab48cd2c-a0c6-40da-acba-907fc7bfac90": "DiemThuongXuyen",
-  "81acf4f5-8169-4cc9-2d99-08dbe1c3abf0": "DiemDanhGiaQuaTrinh",
+  "81acf4f5-8169-4cc9-2d99-08dbe1c3abf0": "DiemDanhGiaQuaTrinh1",
+  "f68c0b43-caad-427b-2d9a-08dbe1c3abf0": "DiemDanhGiaQuaTrinh2",
   "7804e06f-3d31-4897-8583-6ab883f90a60": "DiemGiuaKy",
   "d72e8f86-0d8a-49d7-b361-bdb2a84540b0": "DiemThi",
 };
@@ -127,6 +128,26 @@ function normalizeSearchType(value: unknown): SearchType | null {
   return null;
 }
 
+function isRejectedDiemTongKet(value: unknown): boolean {
+  if (typeof value === "number") {
+    return value === -1;
+  }
+
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (!trimmed) return false;
+
+    const parsed = Number(trimmed);
+    if (Number.isFinite(parsed)) {
+      return parsed === -1;
+    }
+
+    return trimmed === "-1.00";
+  }
+
+  return false;
+}
+
 function toBoolean(value: unknown): boolean {
   if (typeof value === "boolean") return value;
   if (typeof value === "string") {
@@ -135,6 +156,13 @@ function toBoolean(value: unknown): boolean {
     if (normalized === "false") return false;
   }
   return false;
+}
+
+function normalizeIncludeSummary(value: unknown, hocKy: string): boolean {
+  if (value === undefined || value === null || value === "") {
+    return !!String(hocKy || "").trim();
+  }
+  return toBoolean(value);
 }
 
 function normalizeCodeList(codesInput: unknown, singleCode: string): string[] {
@@ -641,6 +669,7 @@ function buildOutput(rows: BangDiemRow[], includeSummary: boolean) {
     const cauTrucDiem = mapScoreByKey(String(row.CauTrucDiem || ""), true);
     const diemThi = toNumberOrOriginal(row.DiemThi);
     const diemTongKet = toNumberOrOriginal(row.DiemTongKet);
+    if (isRejectedDiemTongKet(diemTongKet)) continue;
     const xepLoaiMonHoc = String(row.XepLoaiMonHoc || "").trim();
 
     const monHocKey = `${tenMonHoc}::${JSON.stringify(diemThanhPhan)}::${JSON.stringify(cauTrucDiem)}::${diemThi}::${diemTongKet}::${xepLoaiMonHoc}`;
@@ -735,7 +764,7 @@ export async function handleHocVienBangDiemRequest(
     const codes = normalizeCodeList(body?.codes, code);
     const namHoc = String(body?.namHoc || "").trim();
     const hocKy = String(body?.hocKy || "").trim();
-    const includeSummary = toBoolean(body?.includeSummary);
+    const includeSummary = normalizeIncludeSummary(body?.includeSummary, hocKy);
 
     if (!searchType) {
       return json(

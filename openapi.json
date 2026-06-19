@@ -1,0 +1,489 @@
+{
+    "openapi": "3.0.3",
+    "info": {
+        "title": "Hệ thống API Đào tạo TCU",
+        "version": "1.0.0",
+        "description": "API danh sách thực thể đào tạo với tiêu chí lọc tùy biến"
+    },
+    "servers": [
+        {
+            "url": "http://host.docker.internal:1111"
+        }
+    ],
+    "paths": {
+        "/api/chuongTrinh/details": {
+            "post": {
+                "summary": "Lấy danh sách môn học của một chương trình (tên bắt đầu bằng \u0027Chương trình...\u0027)",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "required": [
+                                    "name"
+                                ],
+                                "properties": {
+                                    "name": {
+                                        "type": "string",
+                                        "description": "Tên chương trình cần lấy danh sách môn học",
+                                        "example": "Chương trình CHTM Tác chiến không gian mạng 2024"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/chuongTrinh/list": {
+            "post": {
+                "summary": "Lấy danh sách chương trình (tên bắt đầu bằng \u0027Chương trình...\u0027)",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "properties": {
+                                    "maxResultCount": {
+                                        "type": "integer",
+                                        "description": "Số lượng kết quả tối đa trả về",
+                                        "default": 10
+                                    },
+                                    "skipCount": {
+                                        "type": "integer",
+                                        "description": "Số lượng bản ghi bỏ qua",
+                                        "default": 0
+                                    },
+                                    "name": {
+                                        "type": "string",
+                                        "description": "Từ khóa tìm kiếm tên chương trình",
+                                        "example": "đào tạo"
+                                    }
+                                },
+                                "required": [
+                                    "maxResultCount"
+                                ]
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/chuongTrinhKhoaHoc/search": {
+            "post": {
+                "summary": "Tìm mối quan hệ giữa chương trình và khóa học: chương trình triển khai qua khóa nào, hoặc khóa học thuộc chương trình nào",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "required": [
+                                    "searchType",
+                                    "name"
+                                ],
+                                "properties": {
+                                    "searchType": {
+                                        "type": "string",
+                                        "description": "Giá trị: byKhoaHoc hoặc byChuongTrinh",
+                                        "example": "byKhoaHoc"
+                                    },
+                                    "name": {
+                                        "type": "string",
+                                        "description": "Tên để tìm kiếm theo searchType",
+                                        "example": "Chương trình CHTM"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/monHoc/details": {
+            "post": {
+                "summary": "Lấy danh sách bài học của một môn học",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "required": [
+                                    "name"
+                                ],
+                                "properties": {
+                                    "name": {
+                                        "type": "string",
+                                        "description": "Tên môn học cần lấy bài học",
+                                        "example": "Giáo dục học quân sự"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/khoaHoc/list": {
+            "post": {
+                "summary": "Lấy danh sách khóa học (khoá đào tạo)",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "properties": {
+                                    "maxResultCount": {
+                                        "type": "integer",
+                                        "description": "Số lượng kết quả tối đa trả về",
+                                        "default": 10
+                                    },
+                                    "skipCount": {
+                                        "type": "integer",
+                                        "description": "Số lượng bản ghi bỏ qua",
+                                        "default": 0
+                                    },
+                                    "isActive": {
+                                        "type": "boolean",
+                                        "description": "Mặc định true: bỏ qua khóa học đã kết thúc",
+                                        "default": true
+                                    },
+                                    "name": {
+                                        "type": "string",
+                                        "description": "Từ khóa tìm kiếm tên khóa học",
+                                        "example": "đào tạo"
+                                    }
+                                },
+                                "required": [
+                                    "maxResultCount"
+                                ]
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/khoaHocLopHoc/search": {
+            "post": {
+                "summary": "Lấy thông tin chi tiết khóa học và danh sách lớp học. Dùng API này khi người dùng hỏi thông tin, chi tiết về một khóa học cụ thể (khoá đào tạo)",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "required": [
+                                    "searchType",
+                                    "name"
+                                ],
+                                "properties": {
+                                    "searchType": {
+                                        "type": "string",
+                                        "description": "Giá trị: byKhoaHoc hoặc byLopHoc",
+                                        "example": "byKhoaHoc"
+                                    },
+                                    "name": {
+                                        "type": "string",
+                                        "description": "Từ khóa tìm kiếm",
+                                        "example": "đào tạo si quan cap phan doi"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/khoaHocKeHoachDaoTaoChiTiet/search": {
+            "post": {
+                "summary": "CHỈ dùng khi người dùng hỏi về kế hoạch đào tạo chi tiết hoặc lịch trình học tập theo học kỳ. KHÔNG dùng khi hỏi thông tin chung về khóa học",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "required": [
+                                    "searchType",
+                                    "name"
+                                ],
+                                "properties": {
+                                    "searchType": {
+                                        "type": "string",
+                                        "description": "Giá trị: byKhoaHoc",
+                                        "example": "byKhoaHoc"
+                                    },
+                                    "name": {
+                                        "type": "string",
+                                        "description": "Tên khóa học",
+                                        "example": "đào tạo sĩ quan cấp phân đội"
+                                    },
+                                    "namHoc": {
+                                        "type": "string",
+                                        "description": "Năm học - BẮT BUỘC phải hỏi người dùng trước khi gọi API. KHÔNG được tự điền, KHÔNG được dùng giá trị mặc định"
+                                    },
+                                    "hocKy": {
+                                        "type": "string",
+                                        "description": "Học kỳ (optional) - chỉ dùng khi người dùng cung cấp"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/lopHoc/details": {
+            "post": {
+                "summary": "Lấy danh sách học viên của một lớp học",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "required": [
+                                    "name"
+                                ],
+                                "properties": {
+                                    "name": {
+                                        "type": "string",
+                                        "description": "Tên lớp học cần lấy danh sách học viên",
+                                        "example": "DH30LQF"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/hocVien/list": {
+            "post": {
+                "summary": "Lấy danh sách học viên",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "properties": {
+                                    "maxResultCount": {
+                                        "type": "integer",
+                                        "description": "Số lượng kết quả tối đa trả về",
+                                        "default": 10
+                                    },
+                                    "skipCount": {
+                                        "type": "integer",
+                                        "description": "Số lượng bản ghi bỏ qua",
+                                        "default": 0
+                                    },
+                                    "name": {
+                                        "type": "string",
+                                        "description": "Tìm theo tên học viên (optional)",
+                                        "example": "lê xuân hùng"
+                                    },
+                                    "code": {
+                                        "type": "string",
+                                        "description": "Tìm theo mã học viên (optional, ưu tiên hơn name)",
+                                        "example": "20DK345"
+                                    },
+                                    "isActive": {
+                                        "type": "boolean",
+                                        "description": "Mặc định true: bỏ qua khóa học đã kết thúc",
+                                        "default": true
+                                    }
+                                },
+                                "required": [
+                                    "maxResultCount"
+                                ]
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/hocVienBangDiem/search": {
+            "post": {
+                "summary": "Lấy bảng điểm học viên theo học kỳ",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "required": [
+                                    "searchType"
+                                ],
+                                "properties": {
+                                    "searchType": {
+                                        "type": "string",
+                                        "description": "Giá trị: byHocVien",
+                                        "example": "byHocVien"
+                                    },
+                                    "code": {
+                                        "type": "string",
+                                        "description": "Mã học viên (optional nếu đã có codes)",
+                                        "example": "20ĐQ375"
+                                    },
+                                    "codes": {
+                                        "type": "array",
+                                        "description": "Danh sách mã học viên, hỗ trợ 1 hoặc nhiều phần tử",
+                                        "items": {
+                                            "type": "string"
+                                        },
+                                        "example": [
+                                            "20ĐQ375",
+                                            "20ĐQ376"
+                                        ]
+                                    },
+                                    "namHoc": {
+                                        "type": "string",
+                                        "description": "Năm học - BẮT BUỘC phải hỏi người dùng trước khi gọi API. KHÔNG được tự điền, KHÔNG được dùng giá trị mặc định"
+                                    },
+                                    "hocKy": {
+                                        "type": "string",
+                                        "description": "Học kỳ (optional) - chỉ dùng khi người dùng cung cấp"
+                                    },
+                                    "includeSummary": {
+                                        "type": "boolean",
+                                        "description": "Optional, chỉ dùng khi có hocKy",
+                                        "default": false
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/giangDuong/list": {
+            "post": {
+                "summary": "Lấy danh sách giảng đường",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "properties": {
+                                    "maxResultCount": {
+                                        "type": "integer",
+                                        "description": "Số lượng kết quả tối đa trả về",
+                                        "default": 10
+                                    },
+                                    "skipCount": {
+                                        "type": "integer",
+                                        "description": "Số lượng bản ghi bỏ qua",
+                                        "default": 0
+                                    },
+                                    "name": {
+                                        "type": "string",
+                                        "description": "Từ khóa tìm kiếm tên giảng đường (optional)",
+                                        "example": "T3009"
+                                    }
+                                },
+                                "required": [
+                                    "maxResultCount"
+                                ]
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/doiTuongDaoTao/list": {
+            "post": {
+                "summary": "Lấy danh sách đối tượng đào tạo (loại hình/đối tượng, KHÔNG phải khóa học)",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "properties": {
+                                    "maxResultCount": {
+                                        "type": "integer",
+                                        "description": "Số lượng kết quả tối đa trả về",
+                                        "default": 10
+                                    }
+                                },
+                                "required": [
+                                    "maxResultCount"
+                                ]
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/phanCongGiangDay/search": {
+            "post": {
+                "summary": "Lấy thông tin phân công giảng dạy",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "required": [
+                                    "lopHocName",
+                                    "monHocName"
+                                ],
+                                "properties": {
+                                    "lopHocName": {
+                                        "type": "string",
+                                        "description": "Tên lớp học",
+                                        "example": "ĐH32LQE"
+                                    },
+                                    "monHocName": {
+                                        "type": "string",
+                                        "description": "Tên môn học",
+                                        "example": "Kinh tế chính trị học Mác - Lênin"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/hocVienDiemTongKet/search": {
+            "post": {
+                "summary": "Lấy điểm tổng kết học viên theo năm học/học kỳ",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "required": [
+                                    "code"
+                                ],
+                                "properties": {
+                                    "code": {
+                                        "type": "string",
+                                        "description": "Mã học viên",
+                                        "example": "22ĐH117"
+                                    },
+                                    "namHoc": {
+                                        "type": "string",
+                                        "description": "Năm học (optional)"
+                                    },
+                                    "hocKy": {
+                                        "type": "string",
+                                        "description": "Học kỳ (optional)"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
